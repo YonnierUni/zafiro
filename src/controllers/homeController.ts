@@ -140,7 +140,7 @@ const dictionaries: Record<Locale, HomeDictionary> = {
     },
     metrics: [
       { label: 'Signature and featured cocktails', value: '18+' },
-      { label: 'Lounge atmosphere with premium focus', value: '100%' },
+      { label: 'Cocktails, light bites, and stylish nights', value: 'Rooftop' },
       { label: 'Best nights for reservations', value: 'Thu-Sun' },
     ],
     languageToggle: { en: 'EN', es: 'ES' },
@@ -211,7 +211,7 @@ const dictionaries: Record<Locale, HomeDictionary> = {
     },
     metrics: [
       { label: 'Cócteles de autor y destacados', value: '18+' },
-      { label: 'Atmósfera lounge con enfoque premium', value: '100%' },
+      { label: 'Cócteles, cocina ligera y noches con estilo', value: 'Rooftop' },
       { label: 'Mejores noches para reservar', value: 'Jue-Dom' },
     ],
     languageToggle: { en: 'EN', es: 'ES' },

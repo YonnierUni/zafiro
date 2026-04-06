@@ -1,3 +1,5 @@
+import heroRooftopNight from '../assets/images/hero/hero-rooftop-night.jpg';
+
 export type Locale = 'en' | 'es';
 
 export interface LocalizedText {
@@ -24,6 +26,14 @@ export interface SocialProfile {
   helper: LocalizedText;
 }
 
+export interface MediaAsset {
+  src?: string;
+  alt: LocalizedText;
+  eyebrow: LocalizedText;
+  title: LocalizedText;
+  description: LocalizedText;
+}
+
 export interface BusinessInfo {
   name: string;
   shortName: string;
@@ -46,6 +56,7 @@ export interface BusinessInfo {
   reservationMessage: LocalizedText;
   primaryCta: ActionLink;
   secondaryCta: ActionLink;
+  heroMedia: MediaAsset;
   hours: Array<{ day: LocalizedText; time: LocalizedText }>;
   contactMethods: ContactMethod[];
   socialProfiles: SocialProfile[];
@@ -58,8 +69,8 @@ const whatsappNumber = '573212900379';
 const whatsappDisplay = '+57 321 2900379';
 
 const whatsappMessage: LocalizedText = {
-  en: 'Hello ZAFIRO Bar Lounge, I would like information about reservations and availability.',
-  es: 'Hola ZAFIRO Bar Lounge, quiero informacion sobre reservas y disponibilidad.',
+  en: 'Hello, ZAFIRO Bar Lounge. I would like information about reservations and availability.',
+  es: 'Hola, ZAFIRO Bar Lounge. Quiero información sobre reservas y disponibilidad.',
 };
 
 export const businessInfo: BusinessInfo = {
@@ -80,44 +91,44 @@ export const businessInfo: BusinessInfo = {
     es: 'Calle 25 #21A - 07',
   },
   arrivalNote: {
-    en: 'In front of Gran Plaza - Florencia, Caquetá.',
-    es: 'Frente al Gran Plaza - Florencia, Caquetá.',
+    en: 'Across from Gran Plaza, Florencia, Caquetá.',
+    es: 'Frente al Gran Plaza, Florencia, Caquetá.',
   },
   badge: {
-    en: 'Premium nights in Florencia',
-    es: 'Noches premium en Florencia',
+    en: 'Polished nights in Florencia',
+    es: 'Noches con sello premium en Florencia',
   },
   tagline: {
-    en: 'Rooftop Lounge Bar - Cocktails and light bites',
-    es: 'Rooftop Lounge Bar - Cócteles y cocina ligera',
+    en: 'Rooftop Lounge Bar • Cocktails and light bites',
+    es: 'Rooftop Lounge Bar • Cócteles y cocina ligera',
   },
   identityLine: {
-    en: 'Rooftop Lounge Bar - Cocktails and light bites',
-    es: 'Rooftop Lounge Bar - Cócteles y cocina ligera',
+    en: 'Rooftop Lounge Bar • Cocktails and light bites',
+    es: 'Rooftop Lounge Bar • Cócteles y cocina ligera',
   },
   headline: {
-    en: 'Crafted cocktails, sapphire tones, and a rooftop lounge atmosphere made to linger.',
-    es: 'Cócteles de autor, tonos zafiro y una atmósfera rooftop lounge hecha para quedarse.',
+    en: 'Signature cocktails, sapphire tones, and a rooftop atmosphere made for staying a little longer.',
+    es: 'Cócteles de autor, tonos zafiro y una atmósfera rooftop hecha para quedarse un rato más.',
   },
   description: {
     en: 'ZAFIRO Bar Lounge brings together cocktails, light bites, music, and polished nightlife energy for couples, groups, and celebrations in Florencia.',
-    es: 'ZAFIRO Bar Lounge reúne cócteles, cocina ligera, música y una energía nocturna cuidada para parejas, grupos y celebraciones en Florencia.',
+    es: 'ZAFIRO Bar Lounge reúne cócteles, cocina ligera, música y una energía nocturna bien cuidada para parejas, grupos y celebraciones en Florencia.',
   },
   story: {
-    en: 'ZAFIRO Bar Lounge is designed for evenings that feel elevated without losing their warmth. Signature cocktails, subtle lighting, and a social rhythm come together in a setting that feels stylish, welcoming, and distinctly local.',
-    es: 'ZAFIRO Bar Lounge está pensado para noches que se sienten elevadas sin perder cercanía. Cócteles de autor, iluminación sutil y un ritmo social bien cuidado se unen en un lugar elegante, acogedor y con personalidad local.',
+    en: 'Designed for nights that feel elevated yet warm, with signature cocktails, subtle lighting, and an easy social rhythm.',
+    es: 'Pensado para noches que se sienten elevadas y cercanas, con cócteles de autor, iluminación sutil y un ritmo social fácil de disfrutar.',
   },
   ambiance: {
-    en: 'Expect intimate lighting, refined textures, standout cocktails, and the kind of atmosphere that turns a casual plan into a memorable night.',
-    es: 'Aquí te espera iluminación íntima, texturas refinadas, cócteles que destacan y esa atmósfera que convierte un plan casual en una noche memorable.',
+    en: 'Intimate lighting, refined textures, and standout cocktails turn a casual plan into a better night.',
+    es: 'Iluminación íntima, texturas refinadas y cócteles bien servidos convierten un plan casual en una mejor noche.',
   },
   signatureMoodLabel: {
     en: 'Signature mood',
     es: 'Esencia ZAFIRO',
   },
   signatureMoodText: {
-    en: 'Sapphire accents, amber warmth, and a rooftop lounge mood built for cocktails, good photos, and plans worth repeating.',
-    es: 'Acentos zafiro, calidez ámbar y un mood rooftop lounge pensado para cócteles, buenas fotos y planes que dan ganas de volver.',
+    en: 'Sapphire accents, amber warmth, and a mood built for cocktails, good photos, and plans worth repeating.',
+    es: 'Acentos zafiro, calidez ámbar y un mood pensado para cócteles, buenas fotos y planes que se repiten.',
   },
   reserveLabel: {
     en: 'Reserve',
@@ -146,6 +157,25 @@ export const businessInfo: BusinessInfo = {
     },
     href: '#menu',
   },
+  heroMedia: {
+    src: heroRooftopNight,
+    alt: {
+      en: 'Night view of ZAFIRO Bar Lounge rooftop atmosphere',
+      es: 'Vista nocturna de la atmósfera rooftop de ZAFIRO Bar Lounge',
+    },
+    eyebrow: {
+      en: 'Rooftop nights',
+      es: 'Noches rooftop',
+    },
+    title: {
+      en: 'ZAFIRO after dark',
+      es: 'ZAFIRO al caer la noche',
+    },
+    description: {
+      en: 'A first look at the rooftop mood, polished lighting, and the atmosphere that defines the night.',
+      es: 'Una primera mirada al mood del rooftop, la iluminación cuidada y la atmósfera que define la noche.',
+    },
+  },
   hours: [
     {
       day: {
@@ -153,8 +183,8 @@ export const businessInfo: BusinessInfo = {
         es: 'Jueves a domingo',
       },
       time: {
-        en: 'From 6:00 PM until 1:00-2:00 AM',
-        es: 'Desde las 6:00 PM hasta la 1:00-2:00 AM',
+        en: 'From 6:00 PM until 1:00–2:00 AM',
+        es: 'Desde las 6:00 PM hasta la 1:00–2:00 AM',
       },
     },
     {
@@ -180,7 +210,7 @@ export const businessInfo: BusinessInfo = {
       title: { en: 'Instagram messages', es: 'Mensajes por Instagram' },
       detail: {
         en: '@zafirobarlounge for event questions, content discovery, and direct contact.',
-        es: '@zafirobarlounge para consultas de eventos, contenido y contacto directo.',
+        es: '@zafirobarlounge para consultas sobre eventos, contenido y contacto directo.',
       },
     },
     {
@@ -201,7 +231,7 @@ export const businessInfo: BusinessInfo = {
       },
       helper: {
         en: 'Official Instagram profile for venue atmosphere, cocktails, and event content.',
-        es: 'Perfil oficial para ambiente del lugar, cócteles y contenido de eventos.',
+        es: 'Perfil oficial para mostrar el ambiente del lugar, cócteles y contenido de eventos.',
       },
     },
     {
@@ -237,20 +267,20 @@ export const businessInfo: BusinessInfo = {
       },
       helper: {
         en: 'Add only if the brand will actively publish short-form nightlife content here.',
-        es: 'Agregar solo si la marca va a publicar contenido corto de vida nocturna aqui.',
+        es: 'Agregar solo si la marca va a publicar contenido corto de vida nocturna aquí.',
       },
     },
   ],
   footerDescription: {
-    en: 'A rooftop lounge bar built around cocktails, light bites, atmosphere, and nights that deserve a better setting.',
-    es: 'Un rooftop lounge bar construido alrededor de cócteles, cocina ligera, atmósfera y noches que merecen un mejor escenario.',
+    en: 'A rooftop lounge bar built around signature cocktails, light bites, atmosphere, and nights that deserve a better setting.',
+    es: 'Un rooftop lounge bar construido alrededor de cócteles de autor, cocina ligera, atmósfera y noches que merecen un mejor escenario.',
   },
   closingPhrase: {
     en: 'Cocktails, light bites, and rooftop atmosphere for nights worth staying out for.',
-    es: 'Cócteles, cocina ligera y atmósfera rooftop para noches que valen la pena.',
+    es: 'Cócteles, cocina ligera y atmósfera rooftop para noches que sí valen la pena.',
   },
   footerNote: {
     en: 'A premium digital front door for reservations, social discovery, and the next stage of the brand in Florencia.',
-    es: 'Una entrada digital premium para reservas, descubrimiento social y la siguiente etapa de la marca en Florencia.',
+    es: 'Una entrada digital premium para reservas, descubrimiento en redes y la siguiente etapa de la marca en Florencia.',
   },
 };

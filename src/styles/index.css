@@ -23,6 +23,10 @@ body {
   color: #f5efe6;
 }
 
+#root {
+  isolation: isolate;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -32,7 +36,130 @@ a {
   text-decoration: none;
 }
 
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+:focus-visible {
+  outline: 2px solid rgba(113, 216, 255, 0.78);
+  outline-offset: 3px;
+}
+
 ::selection {
   background: rgba(113, 216, 255, 0.3);
   color: #f5efe6;
+}
+
+@layer components {
+  .interactive-card {
+    transition:
+      transform 260ms ease,
+      border-color 260ms ease,
+      background-color 260ms ease,
+      box-shadow 260ms ease;
+    transform: translateY(0);
+  }
+
+  .interactive-card:hover {
+    border-color: rgba(113, 216, 255, 0.22);
+    box-shadow:
+      0 18px 48px rgba(0, 0, 0, 0.22),
+      0 0 0 1px rgba(113, 216, 255, 0.06);
+    transform: translateY(-3px);
+  }
+
+  .interactive-card:focus-within {
+    border-color: rgba(113, 216, 255, 0.28);
+    box-shadow:
+      0 18px 48px rgba(0, 0, 0, 0.2),
+      0 0 0 1px rgba(113, 216, 255, 0.08);
+  }
+
+  .interactive-button {
+    transition:
+      transform 220ms ease,
+      border-color 220ms ease,
+      background-color 220ms ease,
+      color 220ms ease,
+      box-shadow 220ms ease;
+  }
+
+  .interactive-button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
+  }
+
+  .interactive-button:active {
+    transform: translateY(0);
+  }
+
+  .interactive-link {
+    position: relative;
+    transition: color 220ms ease, opacity 220ms ease;
+  }
+
+  .interactive-link::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -0.45rem;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(113, 216, 255, 0.9), transparent);
+    opacity: 0;
+    transform: translateY(3px);
+    transition: opacity 220ms ease, transform 220ms ease;
+  }
+
+  .interactive-link:hover::after,
+  .interactive-link:focus-visible::after {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .interactive-image-shell {
+    transition:
+      transform 320ms ease,
+      border-color 320ms ease,
+      box-shadow 320ms ease;
+  }
+
+  .interactive-image-shell:hover {
+    border-color: rgba(255, 255, 255, 0.14);
+    box-shadow: 0 22px 54px rgba(0, 0, 0, 0.24);
+    transform: translateY(-2px);
+  }
+
+  .desktop-section-divider {
+    position: relative;
+  }
+
+  @media (min-width: 1280px) {
+    .desktop-section-divider::before {
+      content: "";
+      position: absolute;
+      inset-inline: 5rem;
+      top: -1px;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.08), transparent);
+      pointer-events: none;
+    }
+
+    .desktop-section-shell {
+      position: relative;
+    }
+
+    .desktop-section-shell::after {
+      content: "";
+      position: absolute;
+      inset-inline: 0;
+      bottom: -2rem;
+      height: 10rem;
+      background: radial-gradient(circle at center, rgba(36, 107, 255, 0.06), transparent 58%);
+      opacity: 0.75;
+      pointer-events: none;
+      z-index: -1;
+    }
+  }
 }

@@ -25,6 +25,7 @@ export interface HomeDictionary {
     eyebrow: string;
     title: string;
     description: string;
+    note: string;
   };
   gallery: {
     eyebrow: string;
@@ -54,8 +55,6 @@ export interface HomeDictionary {
     whereDescription: string;
     hours: string;
     hoursNote: string;
-    contactMethods: string;
-    contactNote: string;
   };
   footer: {
     eyebrow: string;
@@ -77,68 +76,66 @@ export interface HomeDictionary {
 const dictionaries: Record<Locale, HomeDictionary> = {
   en: {
     nav: { about: 'About', menu: 'Menu', gallery: 'Gallery', experience: 'Experience', contact: 'Contact' },
-    hero: { tonightLabel: 'Tonight at Zafiro', cityLabel: 'Florencia' },
+    hero: { tonightLabel: 'Tonight at ZAFIRO', cityLabel: 'Florencia' },
     about: {
-      eyebrow: 'About Zafiro',
-      title: 'A polished address for cocktails, good music, and nights that unfold at the right pace.',
+      eyebrow: 'About ZAFIRO',
+      title: 'A polished address for cocktails, good music, and nights that move at the right pace.',
       whyPeopleCome: 'Why guests choose it',
       atmosphereLabel: 'Atmosphere',
       bullets: [
-        'Signature cocktails served with visual care and balance.',
-        'Music, match nights, and celebrations with a more polished atmosphere.',
-        'A stylish setting that still feels warm, social, and easy to enjoy.',
+        'Signature cocktails with visual care and personality.',
+        'Music, match nights, and celebrations in a more polished setting.',
+        'A stylish space that still feels warm and easy to enjoy.',
       ],
     },
     menu: {
       eyebrow: 'Featured Menu',
-      title: 'A concise menu preview with signature drinks and polished presentation.',
+      title: 'A focused menu preview with signature drinks, fresh mixes, and celebration-ready pours.',
       description:
-        "A curated selection of house signatures, fresh tropical mixes, and celebration-ready pours that communicate the bar's premium identity at a glance.",
+        "A curated selection of house favorites, tropical freshness, and visual standouts that communicate the bar's premium identity at a glance.",
+      note: 'Discover more house cocktails, classics, and non-alcoholic options in the full menu at the venue.',
     },
     gallery: {
       eyebrow: 'Gallery Preview',
-      title: 'Intentional placeholders for drinks, ambiance, and real moments inside the venue.',
+      title: 'A first look at the cocktails, atmosphere, and nights that shape ZAFIRO.',
       description:
-        'The gallery is structured to receive future photography without feeling empty today, giving each visual block a clear role in the story of the place.',
+        'A reserved visual preview for the images that will soon bring the venue, the drinks, and the mood of the place to life.',
     },
     experience: {
       eyebrow: 'Experience',
-      title: 'More than a night out: a social experience with music, celebration, and atmosphere.',
+      title: 'Music, celebration, and atmosphere in a social rhythm that makes the night feel easy.',
       description:
-        'From match nights to birthdays and group plans, this section highlights the moments that give Zafiro its rhythm and make people want to come back.',
+        'From match nights to birthdays and group plans, ZAFIRO is built for moments people actually want to repeat.',
     },
     contact: {
       eyebrow: 'Reservations',
       title: 'Set the plan early and arrive with the night already in motion.',
       description:
-        'Reserve by WhatsApp, ask about availability, and line up birthdays, gatherings, or a polished night out before you arrive.',
-      button: 'Contact on WhatsApp',
+        'Reach out on WhatsApp for reservations, availability, birthdays, and table plans.',
+      button: 'Reserve on WhatsApp',
     },
     location: {
       eyebrow: 'Location & Hours',
-      title: 'Practical details for finding the venue, planning the visit, and arriving with confidence.',
+      title: 'Find ZAFIRO easily and arrive with the night already clear.',
       description:
-        'The page closes with the details guests need most: address, neighborhood, hours, arrival reference, and direct contact channels.',
+        'Address, neighborhood, arrival reference, and hours in one clean place.',
       where: 'Location',
       cityLabel: 'City',
       districtLabel: 'Area',
       addressLabel: 'Address',
       arrivalLabel: 'Arrival notes',
-      whereDescription:
-        'Structured to support a future embedded map while already making the venue feel easy to find.',
+      whereDescription: 'Just across from Gran Plaza, with a location that is easy to identify from the moment you arrive.',
       hours: 'Hours',
-      hoursNote: 'Open Thursday through Sunday and on holidays, starting at 6:00 PM with late closing depending on the night.',
-      contactMethods: 'Contact Methods',
-      contactNote: 'Built to make reservations, direct questions, and social contact feel immediate and clear.',
+      hoursNote: 'Open Thursday through Sunday and on holidays from 6:00 PM, with late closing depending on the night.',
     },
     footer: {
-      eyebrow: 'Zafiro Bar Lounge',
-      contactLabel: 'Contact',
-      contactDescription: 'Direct channels for reservations, availability, social discovery, and future customer attention.',
-      socialLabel: 'Social',
-      availabilityLabel: 'Open for plans',
-      availabilityDescription: 'Florencia, Caquetá with a rooftop lounge concept built for cocktails, light bites, and polished nightlife.',
-      closingNote: 'Built as the digital base for ZAFIRO’s next stage of visibility, reservations, and brand growth.',
+      eyebrow: 'ZAFIRO Bar Lounge',
+      contactLabel: 'Reservations',
+      contactDescription: 'WhatsApp remains the fastest way to reserve, ask about availability, and plan a night out.',
+      socialLabel: 'Follow ZAFIRO',
+      availabilityLabel: 'Florencia, Caquetá',
+      availabilityDescription: 'A rooftop lounge concept built around cocktails, light bites, and polished nightlife.',
+      closingNote: 'Cocktails, music, and a better setting for nights that deserve more than the ordinary.',
       rights: 'All rights reserved.',
     },
     metrics: [
@@ -149,86 +146,98 @@ const dictionaries: Record<Locale, HomeDictionary> = {
     languageToggle: { en: 'EN', es: 'ES' },
   },
   es: {
-    nav: { about: 'Nosotros', menu: 'Menu', gallery: 'Galeria', experience: 'Experiencia', contact: 'Contacto' },
-    hero: { tonightLabel: 'Esta noche en Zafiro', cityLabel: 'Florencia' },
+    nav: { about: 'Nosotros', menu: 'Menú', gallery: 'Galería', experience: 'Experiencia', contact: 'Contacto' },
+    hero: { tonightLabel: 'Esta noche en ZAFIRO', cityLabel: 'Florencia' },
     about: {
-      eyebrow: 'Sobre Zafiro',
-      title: 'Un lugar cuidado para cocteles, buena musica y noches que fluyen con el ritmo correcto.',
-      whyPeopleCome: 'Por que lo eligen',
+      eyebrow: 'Sobre ZAFIRO',
+      title: 'Un lugar bien puesto para cócteles, buena música y noches con el ritmo correcto.',
+      whyPeopleCome: 'Por qué lo eligen',
       atmosphereLabel: 'Ambiente',
       bullets: [
-        'Cocteles de autor servidos con presentacion cuidada y personalidad.',
-        'Musica, noches de partido y celebraciones con una atmosfera mas pulida.',
-        'Un lugar elegante que sigue sintiendose cercano, social y facil de disfrutar.',
+        'Cócteles de autor con presentación cuidada y personalidad.',
+        'Música, noches de partido y celebraciones en un ambiente más pulido.',
+        'Un espacio elegante que igual se siente cercano y fácil de disfrutar.',
       ],
     },
     menu: {
-      eyebrow: 'Menu Destacado',
-      title: 'Una vista breve del menu, con tragos de firma y presentacion cuidada.',
+      eyebrow: 'Menú destacado',
+      title: 'Una selección breve del menú, con tragos de firma, mezclas frescas y opciones para celebrar.',
       description:
-        'Una seleccion de la casa con cocteles de firma, mezclas frescas y opciones pensadas para celebraciones, mostrando de inmediato la identidad premium del bar.',
+        'Una curaduría de la casa con cócteles de autor, perfiles tropicales y presentaciones que dejan ver de inmediato la identidad premium del bar.',
+      note: 'Descubre más opciones de la casa, clásicos y bebidas sin alcohol en el menú completo del lugar.',
     },
     gallery: {
-      eyebrow: 'Preview Visual',
-      title: 'Placeholders intencionales para bebidas, ambiente y momentos reales dentro del lugar.',
+      eyebrow: 'Galería',
+      title: 'Una primera mirada a los cócteles, el ambiente y las noches que definen a ZAFIRO.',
       description:
-        'La galeria queda lista para recibir fotos reales sin sentirse vacia hoy, porque cada bloque visual ya cumple un papel dentro de la historia del lugar.',
+        'Un preview visual reservado para las imágenes que pronto mostrarán el lugar, las bebidas y el mood real de la experiencia.',
     },
     experience: {
       eyebrow: 'Experiencia',
-      title: 'Mas que una salida: una experiencia social con musica, celebracion y atmosfera.',
+      title: 'Música, celebración y atmósfera en un ritmo social que hace fácil quedarse un rato más.',
       description:
-        'Desde las noches de partido hasta los cumpleanos y los planes en grupo, esta seccion muestra los momentos que le dan ritmo a Zafiro y hacen que la gente quiera volver.',
+        'Desde noches de partido hasta cumpleaños y planes en grupo, ZAFIRO está pensado para momentos que sí provocan volver.',
     },
     contact: {
       eyebrow: 'Reservas',
       title: 'Define el plan con tiempo y llega con la noche ya encaminada.',
       description:
-        'Reserva por WhatsApp, consulta disponibilidad y deja listo el plan para cumpleaños, reuniones o una buena salida antes de llegar.',
-      button: 'Contactar por WhatsApp',
+        'Escríbenos por WhatsApp para reservas, disponibilidad, cumpleaños y planes de mesa.',
+      button: 'Reserva por WhatsApp',
     },
     location: {
-      eyebrow: 'Ubicacion y Horarios',
-      title: 'Detalles practicos para ubicar el lugar, planear la visita y llegar con confianza.',
+      eyebrow: 'Ubicación y horarios',
+      title: 'Encuentra ZAFIRO fácil y llega con la noche ya clara.',
       description:
-        'La pagina cierra con los datos que mas necesita el cliente: direccion, barrio, horarios, referencia de llegada y canales de contacto directo.',
-      where: 'Ubicacion',
+        'Dirección, barrio, referencia de llegada y horarios en un solo punto.',
+      where: 'Ubicación',
       cityLabel: 'Ciudad',
       districtLabel: 'Zona',
-      addressLabel: 'Direccion',
-      arrivalLabel: 'Referencias de llegada',
-      whereDescription:
-        'Queda lista para integrar un mapa despues, pero ya orienta mejor al cliente desde esta version.',
+      addressLabel: 'Dirección',
+      arrivalLabel: 'Referencia de llegada',
+      whereDescription: 'Frente al Gran Plaza, en un punto fácil de ubicar desde la llegada.',
       hours: 'Horarios',
-      hoursNote: 'Abierto de jueves a domingo y festivos, desde las 6:00 PM y con cierre en la madrugada segun la noche.',
-      contactMethods: 'Canales de Contacto',
-      contactNote: 'Pensado para que reservas, preguntas directas y contacto por redes se sientan claros e inmediatos.',
+      hoursNote: 'Abierto de jueves a domingo y festivos desde las 6:00 PM, con cierre en la madrugada según la noche.',
     },
     footer: {
-      eyebrow: 'Zafiro Bar Lounge',
-      contactLabel: 'Contacto',
-      contactDescription: 'Canales directos para reservas, disponibilidad, descubrimiento social y futura atencion al cliente.',
-      socialLabel: 'Social',
-      availabilityLabel: 'Listo para tus planes',
-      availabilityDescription: 'Florencia, Caquetá con un concepto rooftop lounge pensado para cócteles, cocina ligera y una noche mejor puesta.',
-      closingNote: 'Construido como base digital para la siguiente etapa de visibilidad, reservas y crecimiento de ZAFIRO.',
+      eyebrow: 'ZAFIRO Bar Lounge',
+      contactLabel: 'Reservas',
+      contactDescription: 'WhatsApp sigue siendo la vía más rápida para reservar, consultar disponibilidad y cuadrar la noche.',
+      socialLabel: 'Sigue a ZAFIRO',
+      availabilityLabel: 'Florencia, Caquetá',
+      availabilityDescription: 'Un rooftop lounge pensado para cócteles, cocina ligera y noches mejor puestas.',
+      closingNote: 'Cócteles, música y un mejor escenario para noches que merecen salir de lo común.',
       rights: 'Todos los derechos reservados.',
     },
     metrics: [
-      { label: 'Cocteles de firma y destacados', value: '18+' },
-      { label: 'Atmosfera lounge con enfoque premium', value: '100%' },
+      { label: 'Cócteles de autor y destacados', value: '18+' },
+      { label: 'Atmósfera lounge con enfoque premium', value: '100%' },
       { label: 'Mejores noches para reservar', value: 'Jue-Dom' },
     ],
     languageToggle: { en: 'EN', es: 'ES' },
   },
 };
 
+const landingMenuOrder = [
+  'Mains Zafiro',
+  'Margaritas',
+  'Passion Fresh',
+  'Hawaiian Blue',
+  'Cherry Champagne',
+  'Mojito Fresh',
+  'Blue Lagoon Drop',
+] as const;
+
+const landingFeaturedMenuItems = landingMenuOrder
+  .map((name) => featuredMenuItems.find((item) => item.name === name))
+  .filter((item): item is (typeof featuredMenuItems)[number] => Boolean(item));
+
 export function getHomePageData(locale: Locale) {
   return {
     locale,
     dictionary: dictionaries[locale],
     business: businessInfo,
-    featuredMenu: featuredMenuItems,
+    featuredMenu: landingFeaturedMenuItems,
     gallery: galleryMoments,
     highlights: experienceHighlights,
   };

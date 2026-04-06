@@ -41,7 +41,7 @@ export function NavBar({ business, dictionary, locale, onLocaleChange, reserveLa
   return (
     <header className="sticky top-0 z-50 border-b border-white/10 bg-obsidian/65 backdrop-blur-xl">
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-4 sm:px-6 lg:px-8">
-        <a href="#home" className="flex items-center gap-3 text-ivory">
+        <a href="#home" className="interactive-button flex items-center gap-3 rounded-full text-ivory">
           <img
             src={zafiroLogoWhite}
             alt={`${business.name} logo`}
@@ -53,7 +53,7 @@ export function NavBar({ business, dictionary, locale, onLocaleChange, reserveLa
         </a>
         <nav className="hidden items-center gap-6 text-sm text-mist md:flex">
           {navItems.map((item) => (
-            <a key={item.label} href={item.href} className="transition hover:text-ivory">
+            <a key={item.label} href={item.href} className="interactive-link transition hover:text-ivory">
               {item.label}
             </a>
           ))}
@@ -65,7 +65,7 @@ export function NavBar({ business, dictionary, locale, onLocaleChange, reserveLa
                 key={option}
                 type="button"
                 onClick={() => onLocaleChange(option)}
-                className={`rounded-full px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em] transition ${
+                className={`interactive-button rounded-full px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em] transition ${
                   locale === option ? 'bg-ivory text-obsidian' : 'text-mist hover:text-ivory'
                 }`}
               >
@@ -75,7 +75,7 @@ export function NavBar({ business, dictionary, locale, onLocaleChange, reserveLa
           </div>
           <a
             href="#contact"
-            className="hidden rounded-full border border-sapphire/40 bg-sapphire/15 px-4 py-2 text-xs font-semibold uppercase tracking-[0.25em] text-ivory transition hover:border-cyanGlow/50 hover:bg-sapphire/25 sm:block"
+            className="interactive-button hidden rounded-full border border-sapphire/40 bg-sapphire/15 px-4 py-2 text-xs font-semibold uppercase tracking-[0.25em] text-ivory transition hover:border-cyanGlow/50 hover:bg-sapphire/25 sm:block"
           >
             {reserveLabel}
           </a>
@@ -85,7 +85,7 @@ export function NavBar({ business, dictionary, locale, onLocaleChange, reserveLa
             aria-controls="mobile-navigation"
             aria-label={isMobileMenuOpen ? 'Close menu' : 'Open menu'}
             onClick={() => setIsMobileMenuOpen((current) => !current)}
-            className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/5 text-ivory transition hover:border-cyanGlow/40 hover:bg-white/10 md:hidden"
+            className="interactive-button inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/5 text-ivory transition hover:border-cyanGlow/40 hover:bg-white/10 md:hidden"
           >
             <span className="relative h-4 w-5">
               <span
@@ -145,7 +145,7 @@ export function NavBar({ business, dictionary, locale, onLocaleChange, reserveLa
                         key={option}
                         type="button"
                         onClick={() => onLocaleChange(option)}
-                        className={`rounded-full px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em] transition ${
+                        className={`interactive-button rounded-full px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em] transition ${
                           locale === option ? 'bg-ivory text-obsidian' : 'text-mist hover:text-ivory'
                         }`}
                       >
@@ -164,7 +164,7 @@ export function NavBar({ business, dictionary, locale, onLocaleChange, reserveLa
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: 0.04 * index, duration: 0.22 }}
                       onClick={closeMobileMenu}
-                      className="flex items-center justify-between rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3 text-sm font-medium text-ivory transition hover:border-cyanGlow/30 hover:bg-white/[0.06]"
+                      className="interactive-card flex items-center justify-between rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3 text-sm font-medium text-ivory transition hover:border-cyanGlow/30 hover:bg-white/[0.06]"
                     >
                       <span>{item.label}</span>
                       <span className="text-cyanGlow/75">/</span>
@@ -175,7 +175,7 @@ export function NavBar({ business, dictionary, locale, onLocaleChange, reserveLa
                 <a
                   href="#contact"
                   onClick={closeMobileMenu}
-                  className="mt-4 inline-flex w-full items-center justify-center rounded-full border border-sapphire/40 bg-sapphire/15 px-4 py-3 text-xs font-semibold uppercase tracking-[0.25em] text-ivory transition hover:border-cyanGlow/50 hover:bg-sapphire/25"
+                  className="interactive-button mt-4 inline-flex w-full items-center justify-center rounded-full border border-sapphire/40 bg-sapphire/15 px-4 py-3 text-xs font-semibold uppercase tracking-[0.25em] text-ivory transition hover:border-cyanGlow/50 hover:bg-sapphire/25"
                 >
                   {reserveLabel}
                 </a>
@@ -190,7 +190,7 @@ export function NavBar({ business, dictionary, locale, onLocaleChange, reserveLa
 
 function businessLabel(dictionary: HomeDictionary, locale: Locale) {
   if (locale === 'es') {
-    return 'Navegacion';
+    return 'Navegación';
   }
 
   return 'Navigation';

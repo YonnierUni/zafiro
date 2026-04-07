@@ -127,8 +127,8 @@ export const businessInfo: BusinessInfo = {
     es: 'Esencia ZAFIRO',
   },
   signatureMoodText: {
-    en: 'Sapphire accents, amber warmth, and a mood built for cocktails, good photos, and plans worth repeating.',
-    es: 'Acentos zafiro, calidez ámbar y un mood pensado para cócteles, buenas fotos y planes que se repiten.',
+    en: 'Amber warmth, sapphire accents, and an atmosphere made to linger.',
+    es: 'Calidez ámbar, acentos zafiro y un ambiente hecho para quedarse.',
   },
   reserveLabel: {
     en: 'Reserve',
@@ -272,15 +272,15 @@ export const businessInfo: BusinessInfo = {
     },
   ],
   footerDescription: {
-    en: 'A rooftop lounge bar built around signature cocktails, light bites, atmosphere, and nights that deserve a better setting.',
-    es: 'Un rooftop lounge bar construido alrededor de cócteles de autor, cocina ligera, atmósfera y noches que merecen un mejor escenario.',
+    en: 'A rooftop lounge bar for drinks, conversation, and nights that deserve a better setting.',
+    es: 'Un rooftop lounge bar para brindar, conversar y alargar la noche.',
   },
   closingPhrase: {
-    en: 'Cocktails, light bites, and rooftop atmosphere for nights worth staying out for.',
-    es: 'Cócteles, cocina ligera y atmósfera rooftop para noches que sí valen la pena.',
+    en: 'See you where Florencia slows down and the night starts well.',
+    es: 'Nos vemos donde Florencia baja el ritmo y la noche empieza bien.',
   },
   footerNote: {
-    en: 'Florencia nights with cocktails, music, and a setting made to stay a little longer.',
-    es: 'Noches de Florencia con cócteles, música y un escenario para quedarse un rato más.',
+    en: 'Reservations, social updates, and the next good plan in Florencia.',
+    es: 'Reservas, novedades en redes y el próximo buen plan en Florencia.',
   },
 };

@@ -98,8 +98,7 @@ const dictionaries: Record<Locale, HomeDictionary> = {
     gallery: {
       eyebrow: 'Gallery',
       title: 'A room, a signature, and nights worth repeating.',
-      description:
-        'ZAFIRO in its own light.',
+      description: 'ZAFIRO in its own light.',
     },
     experience: {
       eyebrow: 'Experience',
@@ -116,17 +115,17 @@ const dictionaries: Record<Locale, HomeDictionary> = {
     },
     location: {
       eyebrow: 'Location & Hours',
-      title: 'Find ZAFIRO easily and arrive with the night already clear.',
+      title: 'Find ZAFIRO and arrive where the night begins well.',
       description:
-        'Address, neighborhood, arrival reference, and hours in one clean place.',
+        'In Barrio La Libertad, across from Gran Plaza.',
       where: 'Location',
       cityLabel: 'City',
       districtLabel: 'Area',
       addressLabel: 'Address',
-      arrivalLabel: 'Arrival notes',
-      whereDescription: 'Just across from Gran Plaza, with a location that is easy to identify from the moment you arrive.',
+      arrivalLabel: 'Reference',
+      whereDescription: 'An easy point to spot, meet up, and start the plan without detours.',
       hours: 'Hours',
-      hoursNote: 'Open Thursday through Sunday and on holidays from 6:00 PM, with late closing depending on the night.',
+      hoursNote: 'Open Thursday to Sunday and holidays from 6:00 PM.',
     },
     footer: {
       eyebrow: 'ZAFIRO Bar Lounge',
@@ -134,8 +133,8 @@ const dictionaries: Record<Locale, HomeDictionary> = {
       contactDescription: 'WhatsApp is the fastest way to reserve and confirm the plan.',
       socialLabel: 'Follow ZAFIRO',
       availabilityLabel: 'Florencia, Caquetá',
-      availabilityDescription: 'A rooftop lounge concept built around cocktails, light bites, and polished nightlife.',
-      closingNote: 'Cocktails, music, and a better setting for nights that deserve more than the ordinary.',
+      availabilityDescription: 'A meeting point for good drinks and better plans in Florencia.',
+      closingNote: 'A better place to meet, toast, and stay a little longer.',
       rights: 'All rights reserved.',
     },
     metrics: [
@@ -169,8 +168,7 @@ const dictionaries: Record<Locale, HomeDictionary> = {
     gallery: {
       eyebrow: 'Galería',
       title: 'Un lugar, una firma y noches para repetir.',
-      description:
-        'ZAFIRO en su propia luz.',
+      description: 'ZAFIRO en su propia luz.',
     },
     experience: {
       eyebrow: 'Experiencia',
@@ -187,17 +185,17 @@ const dictionaries: Record<Locale, HomeDictionary> = {
     },
     location: {
       eyebrow: 'Ubicación y horarios',
-      title: 'Encuentra ZAFIRO fácil y llega con la noche ya clara.',
+      title: 'Encuentra ZAFIRO y llega donde la noche empieza bien.',
       description:
-        'Dirección, barrio, referencia de llegada y horarios en un solo punto.',
+        'En Barrio La Libertad, frente al Gran Plaza.',
       where: 'Ubicación',
       cityLabel: 'Ciudad',
       districtLabel: 'Zona',
       addressLabel: 'Dirección',
-      arrivalLabel: 'Referencia de llegada',
-      whereDescription: 'Frente al Gran Plaza, en un punto fácil de ubicar desde la llegada.',
+      arrivalLabel: 'Referencia',
+      whereDescription: 'Un punto fácil de ubicar para encontrarse, llegar sin vueltas y dejar que la noche arranque sola.',
       hours: 'Horarios',
-      hoursNote: 'Abierto de jueves a domingo y festivos desde las 6:00 PM, con cierre en la madrugada según la noche.',
+      hoursNote: 'Abierto de jueves a domingo y festivos desde las 6:00 PM.',
     },
     footer: {
       eyebrow: 'ZAFIRO Bar Lounge',
@@ -205,8 +203,8 @@ const dictionaries: Record<Locale, HomeDictionary> = {
       contactDescription: 'WhatsApp es la vía más rápida para reservar y dejar el plan confirmado.',
       socialLabel: 'Sigue a ZAFIRO',
       availabilityLabel: 'Florencia, Caquetá',
-      availabilityDescription: 'Un rooftop lounge pensado para cócteles, cocina ligera y noches mejor puestas.',
-      closingNote: 'Cócteles, música y un mejor escenario para noches que merecen salir de lo común.',
+      availabilityDescription: 'Un punto de encuentro para buenos tragos y mejores planes en Florencia.',
+      closingNote: 'Un mejor lugar para verse, brindar y quedarse un rato más.',
       rights: 'Todos los derechos reservados.',
     },
     metrics: [

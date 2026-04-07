@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import type { HomeDictionary } from '../controllers/homeController';
 import type { BusinessInfo, Locale } from '../models/business';
+import { SocialIcon } from './SocialIcon';
 
 interface ContactSectionProps {
   business: BusinessInfo;
@@ -31,14 +32,20 @@ export function ContactSection({ business, dictionary, locale }: ContactSectionP
             <p className="mt-5 text-sm leading-7 text-mist sm:text-base">{dictionary.contact.description}</p>
             <div className="mt-5 grid gap-3 sm:grid-cols-2">
               <div className="interactive-card rounded-2xl border border-white/10 bg-obsidian/45 px-4 py-3">
-                <p className="text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-cyanGlow/80">
-                  {business.primaryCta.label[locale]}
-                </p>
+                <div className="flex items-center gap-2 text-cyanGlow/80">
+                  <SocialIcon kind="whatsapp" />
+                  <p className="text-[0.68rem] font-semibold uppercase tracking-[0.24em]">
+                    {business.primaryCta.label[locale]}
+                  </p>
+                </div>
                 <p className="mt-2 text-sm text-ivory">{business.primaryCta.value?.[locale]}</p>
                 <p className="mt-2 text-sm text-mist">{business.primaryCta.helper?.[locale]}</p>
               </div>
               <div className="interactive-card rounded-2xl border border-white/10 bg-obsidian/45 px-4 py-3">
-                <p className="text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-amberGlow">Instagram</p>
+                <div className="flex items-center gap-2 text-amberGlow">
+                  <SocialIcon kind="instagram" />
+                  <p className="text-[0.68rem] font-semibold uppercase tracking-[0.24em]">Instagram</p>
+                </div>
                 <p className="mt-2 text-sm text-ivory">{instagramProfile?.value[locale]}</p>
                 <p className="mt-2 text-sm text-mist">{instagramProfile?.helper[locale]}</p>
               </div>

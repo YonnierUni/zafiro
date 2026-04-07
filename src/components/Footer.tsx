@@ -1,6 +1,7 @@
 import zafiroLogoWhite from '../assets/zafiro-logo-white.png';
 import type { HomeDictionary } from '../controllers/homeController';
 import type { BusinessInfo, Locale } from '../models/business';
+import { SocialIcon } from './SocialIcon';
 
 interface FooterProps {
   business: BusinessInfo;
@@ -49,9 +50,12 @@ export function Footer({ business, dictionary, locale }: FooterProps) {
           <p className="mt-4 max-w-sm leading-7">{dictionary.footer.contactDescription}</p>
 
           <div className="interactive-card mt-5 rounded-2xl border border-white/10 bg-obsidian/55 p-4">
-            <p className="text-[0.68rem] uppercase tracking-[0.28em] text-cyanGlow/80">
-              {business.primaryCta.label[locale]}
-            </p>
+            <div className="flex items-center gap-2 text-cyanGlow/80">
+              <SocialIcon kind="whatsapp" />
+              <p className="text-[0.68rem] uppercase tracking-[0.28em]">
+                {business.primaryCta.label[locale]}
+              </p>
+            </div>
             <a
               href={business.primaryCta.href}
               target="_blank"
@@ -82,9 +86,12 @@ export function Footer({ business, dictionary, locale }: FooterProps) {
                 rel="noreferrer"
                 className="interactive-card rounded-2xl border border-white/10 bg-obsidian/55 px-4 py-4 transition hover:border-cyanGlow/30 hover:text-ivory"
               >
-                <p className="text-[0.68rem] uppercase tracking-[0.28em] text-cyanGlow/80">
-                  {profile.label[locale]}
-                </p>
+                <div className="flex items-center gap-2 text-cyanGlow/80">
+                  <SocialIcon kind={getSocialIconKind(profile.label.en)} />
+                  <p className="text-[0.68rem] uppercase tracking-[0.28em]">
+                    {profile.label[locale]}
+                  </p>
+                </div>
                 <p className="mt-2 leading-7 text-ivory">{profile.value[locale]}</p>
                 <p className="mt-2 leading-7 text-mist">{profile.helper[locale]}</p>
               </a>
@@ -101,4 +108,15 @@ export function Footer({ business, dictionary, locale }: FooterProps) {
       </div>
     </footer>
   );
+}
+
+function getSocialIconKind(label: string): 'instagram' | 'facebook' | 'tiktok' {
+  switch (label) {
+    case 'Instagram':
+      return 'instagram';
+    case 'Facebook':
+      return 'facebook';
+    default:
+      return 'tiktok';
+  }
 }

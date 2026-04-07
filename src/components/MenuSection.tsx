@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import type { HomeDictionary } from '../controllers/homeController';
 import type { Locale } from '../models/business';
@@ -76,7 +77,15 @@ export function MenuSection({ items, dictionary, locale }: MenuSectionProps) {
         ))}
       </div>
       <div className="mt-5 flex items-center justify-between gap-4 border-t border-white/10 pt-4 xl:mt-8">
-        <p className="max-w-2xl text-sm leading-7 text-mist">{dictionary.menu.note}</p>
+        <div className="max-w-2xl">
+          <p className="text-sm leading-7 text-mist">{dictionary.menu.note}</p>
+          <Link
+            to="/menu"
+            className="interactive-link mt-3 inline-flex text-xs font-semibold uppercase tracking-[0.24em] text-cyanGlow/85"
+          >
+            {locale === 'es' ? 'Ver carta completa' : 'View full menu'}
+          </Link>
+        </div>
         <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[0.64rem] uppercase tracking-[0.24em] text-cyanGlow/80 md:hidden">
           {mobileFeaturedCount} {locale === 'es' ? 'destacados' : 'featured'}
         </div>

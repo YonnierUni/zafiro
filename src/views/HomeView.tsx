@@ -9,18 +9,51 @@ import { LocationSection } from '../components/LocationSection';
 import { MenuSection } from '../components/MenuSection';
 import { NavBar } from '../components/NavBar';
 import { getHomePageData } from '../controllers/homeController';
+import { loadMenuData } from '../controllers/menuController';
 import type { Locale } from '../models/business';
+import { buildFallbackFeaturedMenuItem, buildFeaturedMenuItems } from '../models/menu';
+import { getVisibleMenuItems, normalizeMenuCategory, type MenuDataItem } from '../models/menuData';
 
 const defaultLocale: Locale = 'es';
 
 export function HomeView() {
   const [locale, setLocale] = useState<Locale>(defaultLocale);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const { business, featuredMenu, gallery, highlights, dictionary } = getHomePageData(locale);
+  const [menuItems, setMenuItems] = useState<MenuDataItem[]>([]);
+  const { business, gallery, highlights, dictionary } = getHomePageData(locale);
 
   useEffect(() => {
     document.documentElement.lang = locale;
   }, [locale]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    loadMenuData()
+      .then((data) => {
+        if (isMounted) {
+          setMenuItems(getVisibleMenuItems(data.items));
+        }
+      })
+      .catch((error) => {
+        console.error('Unable to load menu data.', error);
+
+        if (isMounted) {
+          setMenuItems([]);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const featuredMenu = buildFeaturedMenuItems(menuItems);
+  const featuredMenuFallback = menuItems
+    .filter((item) => normalizeMenuCategory(item.tipo) === 'cocteles' && item.imagen)
+    .slice(0, 7)
+    .map(buildFallbackFeaturedMenuItem);
+  const renderedFeaturedMenu = featuredMenu.length ? featuredMenu : featuredMenuFallback;
 
   return (
     <div className="bg-obsidian text-ivory">
@@ -38,7 +71,7 @@ export function HomeView() {
           <AboutSection business={business} dictionary={dictionary} locale={locale} />
         </div>
         <div className="desktop-section-shell desktop-section-divider">
-          <MenuSection items={featuredMenu} dictionary={dictionary} locale={locale} />
+          <MenuSection items={renderedFeaturedMenu} dictionary={dictionary} locale={locale} />
         </div>
         <div className="desktop-section-shell desktop-section-divider">
           <GallerySection gallery={gallery} dictionary={dictionary} locale={locale} />

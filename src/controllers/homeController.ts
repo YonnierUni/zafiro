@@ -1,6 +1,5 @@
 import { businessInfo, type Locale } from '../models/business';
 import { experienceHighlights, galleryMoments } from '../models/experience';
-import { featuredMenuItems } from '../models/menu';
 
 export interface HomeDictionary {
   nav: {
@@ -26,6 +25,12 @@ export interface HomeDictionary {
     title: string;
     description: string;
     note: string;
+  };
+  fullMenu: {
+    eyebrow: string;
+    title: string;
+    description: string;
+    categoryEyebrow: string;
   };
   gallery: {
     eyebrow: string;
@@ -93,7 +98,13 @@ const dictionaries: Record<Locale, HomeDictionary> = {
       title: 'A focused menu preview with signature drinks, fresh mixes, and celebration-ready pours.',
       description:
         "A curated selection of house favorites, tropical freshness, and visual standouts that communicate the bar's premium identity at a glance.",
-      note: 'Discover more house cocktails, classics, and non-alcoholic options in the full menu at the venue.',
+      note: 'Discover more house cocktails, classics, and non-alcoholic options in the full menu below.',
+    },
+    fullMenu: {
+      eyebrow: 'Full Menu',
+      title: 'The full menu, grouped for an easy read between cocktails, drinks, and light food.',
+      description: 'Browse the full selection served at ZAFIRO.',
+      categoryEyebrow: 'Category',
     },
     gallery: {
       eyebrow: 'Gallery',
@@ -109,15 +120,13 @@ const dictionaries: Record<Locale, HomeDictionary> = {
     contact: {
       eyebrow: 'Reservations',
       title: 'Set the plan early and arrive with the night already in motion.',
-      description:
-        'Reserve on WhatsApp and keep Instagram close for updates, atmosphere, and direct messages.',
+      description: 'Reserve on WhatsApp and keep Instagram close for updates, atmosphere, and direct messages.',
       button: 'Reserve on WhatsApp',
     },
     location: {
       eyebrow: 'Location & Hours',
       title: 'Find ZAFIRO and arrive where the night begins well.',
-      description:
-        'In Barrio La Libertad, across from Gran Plaza.',
+      description: 'In Barrio La Libertad, across from Gran Plaza.',
       where: 'Location',
       cityLabel: 'City',
       districtLabel: 'Area',
@@ -163,7 +172,13 @@ const dictionaries: Record<Locale, HomeDictionary> = {
       title: 'Una selección breve del menú, con tragos de firma, mezclas frescas y opciones para celebrar.',
       description:
         'Una curaduría de la casa con cócteles de autor, perfiles tropicales y presentaciones que dejan ver de inmediato la identidad premium del bar.',
-      note: 'Descubre más opciones de la casa, clásicos y bebidas sin alcohol en el menú completo del lugar.',
+      note: 'Descubre más opciones de la casa, clásicos y bebidas sin alcohol en la carta completa de abajo.',
+    },
+    fullMenu: {
+      eyebrow: 'Carta completa',
+      title: 'La carta completa, organizada para recorrer cócteles, bebidas y cocina ligera con facilidad.',
+      description: 'Explora la selección completa que se sirve en ZAFIRO.',
+      categoryEyebrow: 'Categoría',
     },
     gallery: {
       eyebrow: 'Galería',
@@ -179,15 +194,13 @@ const dictionaries: Record<Locale, HomeDictionary> = {
     contact: {
       eyebrow: 'Reservas',
       title: 'Define el plan con tiempo y llega con la noche ya encaminada.',
-      description:
-        'Reserva por WhatsApp y mantén Instagram cerca para novedades, ambiente y mensajes directos.',
+      description: 'Reserva por WhatsApp y mantén Instagram cerca para novedades, ambiente y mensajes directos.',
       button: 'Reserva por WhatsApp',
     },
     location: {
       eyebrow: 'Ubicación y horarios',
       title: 'Encuentra ZAFIRO y llega donde la noche empieza bien.',
-      description:
-        'En Barrio La Libertad, frente al Gran Plaza.',
+      description: 'En Barrio La Libertad, frente al Gran Plaza.',
       where: 'Ubicación',
       cityLabel: 'Ciudad',
       districtLabel: 'Zona',
@@ -216,26 +229,11 @@ const dictionaries: Record<Locale, HomeDictionary> = {
   },
 };
 
-const landingMenuOrder = [
-  'Mains Zafiro',
-  'Margaritas',
-  'Passion Fresh',
-  'Hawaiian Blue',
-  'Cherry Champagne',
-  'Mojito Fresh',
-  'Blue Lagoon Drop',
-] as const;
-
-const landingFeaturedMenuItems = landingMenuOrder
-  .map((name) => featuredMenuItems.find((item) => item.name === name))
-  .filter((item): item is (typeof featuredMenuItems)[number] => Boolean(item));
-
 export function getHomePageData(locale: Locale) {
   return {
     locale,
     dictionary: dictionaries[locale],
     business: businessInfo,
-    featuredMenu: landingFeaturedMenuItems,
     gallery: galleryMoments,
     highlights: experienceHighlights,
   };

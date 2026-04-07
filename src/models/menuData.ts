@@ -79,7 +79,7 @@ export function sanitizeMenuText(value: string) {
 }
 
 export function getMenuItemDisplayDescription(item: MenuDataItem) {
-  return sanitizeMenuText(item.description || item.preparacion || item.ingredientes || '');
+  return sanitizeMenuText(item.description ?? '');
 }
 
 export function getLocalizedCategoryLabel(category: MenuCategory, locale: Locale) {

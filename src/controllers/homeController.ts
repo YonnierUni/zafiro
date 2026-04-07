@@ -97,9 +97,9 @@ const dictionaries: Record<Locale, HomeDictionary> = {
     },
     gallery: {
       eyebrow: 'Gallery',
-      title: 'Signature cocktails, rooftop atmosphere, and nights with their own rhythm.',
+      title: 'A room, a signature, and nights worth repeating.',
       description:
-        'A closer look at the mood, the room, and the moments that define ZAFIRO.',
+        'ZAFIRO in its own light.',
     },
     experience: {
       eyebrow: 'Experience',
@@ -168,9 +168,9 @@ const dictionaries: Record<Locale, HomeDictionary> = {
     },
     gallery: {
       eyebrow: 'Galería',
-      title: 'Cócteles de autor, atmósfera rooftop y noches con ritmo propio.',
+      title: 'Un lugar, una firma y noches para repetir.',
       description:
-        'Una mirada al mood, al lugar y a los momentos que definen a ZAFIRO.',
+        'ZAFIRO en su propia luz.',
     },
     experience: {
       eyebrow: 'Experiencia',

@@ -46,19 +46,19 @@ export const experienceHighlights: ExperienceHighlight[] = [
 
 export const galleryMoments: GalleryMoment[] = [
   {
-    title: { en: 'Signature cocktails with ZAFIRO’s seal', es: 'Cócteles con el sello de ZAFIRO' },
+    title: { en: 'The signature in every glass', es: 'La firma en cada copa' },
     tag: { en: 'Cocktails', es: 'Cócteles' },
     description: {
-      en: 'Close-up pours, polished glassware, and the house style that sets the tone from the first round.',
-      es: 'Cócteles bien servidos, cristalería cuidada y la firma de la casa que marca el tono desde la primera ronda.',
+      en: 'Color, detail, and pours made to set the tone from the first round.',
+      es: 'Color, detalle y tragos que marcan el tono desde la primera ronda.',
     },
     focus: {
-      en: 'Signature cocktails',
-      es: 'Cócteles de autor',
+      en: 'Brand mood',
+      es: 'Mood de marca',
     },
     placeholderLabel: {
-      en: 'Signature cocktails',
-      es: 'Cócteles de autor',
+      en: 'Brand mood',
+      es: 'Mood de marca',
     },
     accent: 'from-sapphire/35 via-cyanGlow/10 to-transparent',
     panelTone: 'from-[#182747] via-[#10131c] to-[#09090b]',
@@ -78,25 +78,25 @@ export const galleryMoments: GalleryMoment[] = [
         es: 'Cócteles de firma, en primer plano y con acabado cuidado',
       },
       description: {
-        en: 'Cocktails that open the night with color, detail, and a clear point of view.',
-        es: 'Cócteles que abren la noche con color, detalle y una identidad clara.',
+        en: 'A house style with polish, character, and a clear point of view.',
+        es: 'Una casa con estilo, carácter y una identidad muy clara.',
       },
     },
   },
   {
-    title: { en: 'Tables, textures, and rooftop mood', es: 'Mesas, texturas y mood rooftop' },
+    title: { en: 'Tables, light, and rooftop texture', es: 'Mesas, luz y textura rooftop' },
     tag: { en: 'Venue', es: 'Lugar' },
     description: {
-      en: 'Lighting, seating, and interior details shape the kind of place that invites you to stay longer.',
-      es: 'La iluminación, las mesas y los detalles del lugar construyen ese ambiente que invita a quedarse un rato más.',
+      en: 'A room with character, soft light, and details that elevate the plan.',
+      es: 'Un lugar con carácter, luz cuidada y detalles que elevan el plan.',
     },
     focus: {
-      en: 'Venue atmosphere',
-      es: 'Ambiente del lugar',
+      en: 'Venue interior',
+      es: 'Interior del lugar',
     },
     placeholderLabel: {
-      en: 'Venue atmosphere',
-      es: 'Ambiente del lugar',
+      en: 'Venue interior',
+      es: 'Interior del lugar',
     },
     accent: 'from-amberGlow/25 via-white/5 to-transparent',
     panelTone: 'from-[#231910] via-[#14151d] to-[#09090b]',
@@ -116,25 +116,25 @@ export const galleryMoments: GalleryMoment[] = [
         es: 'Mesas, iluminación y textura lounge',
       },
       description: {
-        en: 'A room with character, soft light, and the kind of setting that elevates the plan.',
-        es: 'Un lugar con carácter, luz cuidada y ese escenario que hace subir el nivel del plan.',
+        en: 'The kind of room that makes the night feel better from the moment you sit down.',
+        es: 'Ese tipo de lugar que hace que la noche se sienta mejor desde que te sientas.',
       },
     },
   },
   {
-    title: { en: 'Celebrations, music, and shared nights', es: 'Celebraciones, música y noches compartidas' },
+    title: { en: 'Shared plans, music, and celebration', es: 'Planes compartidos, música y celebración' },
     tag: { en: 'Events', es: 'Eventos' },
     description: {
-      en: 'Birthdays, toasts, and social energy come together in nights made to be shared around the table.',
-      es: 'Cumpleaños, brindis y energía social se encuentran en noches hechas para reunirse alrededor de la mesa.',
+      en: 'Birthdays, service, and a social energy built for staying a little longer.',
+      es: 'Cumpleaños, servicio y una energía social hecha para quedarse un rato más.',
     },
     focus: {
-      en: 'Celebrations and social energy',
-      es: 'Celebraciones y energía social',
+      en: 'Social energy',
+      es: 'Energía social',
     },
     placeholderLabel: {
-      en: 'Celebrations and social energy',
-      es: 'Celebraciones y energía social',
+      en: 'Social energy',
+      es: 'Energía social',
     },
     accent: 'from-rose-200/15 via-amberGlow/10 to-transparent',
     panelTone: 'from-[#28151b] via-[#14131a] to-[#09090b]',
@@ -154,8 +154,8 @@ export const galleryMoments: GalleryMoment[] = [
         es: 'Botellas, cumpleaños y celebración social',
       },
       description: {
-        en: 'Music, service, and the kind of night that feels good from the first toast to the last round.',
-        es: 'Música, servicio y ese tipo de noche que se disfruta desde el primer brindis hasta la última ronda.',
+        en: 'Music, service, and nights that move easily from the first toast to the last round.',
+        es: 'Música, servicio y noches que fluyen desde el primer brindis hasta la última ronda.',
       },
     },
   },

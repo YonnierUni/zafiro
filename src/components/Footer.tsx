@@ -9,7 +9,7 @@ interface FooterProps {
 }
 
 export function Footer({ business, dictionary, locale }: FooterProps) {
-  const socialProfiles = business.socialProfiles.filter((profile) => profile.label.en !== 'TikTok');
+  const socialProfiles = business.socialProfiles.filter((profile) => profile.label.en !== 'WhatsApp');
 
   return (
     <footer className="border-t border-white/10">
@@ -60,7 +60,6 @@ export function Footer({ business, dictionary, locale }: FooterProps) {
             >
               {business.primaryCta.value?.[locale]}
             </a>
-            <p className="mt-3 leading-7 text-mist">{business.primaryCta.helper?.[locale]}</p>
           </div>
 
           <p className="mt-5 border-t border-white/10 pt-5 leading-7">{business.footerNote[locale]}</p>

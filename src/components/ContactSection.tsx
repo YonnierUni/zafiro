@@ -9,6 +9,8 @@ interface ContactSectionProps {
 }
 
 export function ContactSection({ business, dictionary, locale }: ContactSectionProps) {
+  const instagramProfile = business.socialProfiles.find((profile) => profile.label.en === 'Instagram');
+
   return (
     <section id="contact" className="mx-auto max-w-7xl px-5 py-20 sm:px-6 sm:py-24 lg:px-8">
       <motion.div
@@ -33,12 +35,12 @@ export function ContactSection({ business, dictionary, locale }: ContactSectionP
                   {business.primaryCta.label[locale]}
                 </p>
                 <p className="mt-2 text-sm text-ivory">{business.primaryCta.value?.[locale]}</p>
+                <p className="mt-2 text-sm text-mist">{business.primaryCta.helper?.[locale]}</p>
               </div>
               <div className="interactive-card rounded-2xl border border-white/10 bg-obsidian/45 px-4 py-3">
-                <p className="text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-amberGlow">
-                  {locale === 'es' ? 'Instagram' : 'Instagram'}
-                </p>
-                <p className="mt-2 text-sm text-ivory">@zafirobarlounge</p>
+                <p className="text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-amberGlow">Instagram</p>
+                <p className="mt-2 text-sm text-ivory">{instagramProfile?.value[locale]}</p>
+                <p className="mt-2 text-sm text-mist">{instagramProfile?.helper[locale]}</p>
               </div>
             </div>
           </div>

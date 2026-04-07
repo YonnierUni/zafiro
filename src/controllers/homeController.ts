@@ -96,10 +96,10 @@ const dictionaries: Record<Locale, HomeDictionary> = {
       note: 'Discover more house cocktails, classics, and non-alcoholic options in the full menu at the venue.',
     },
     gallery: {
-      eyebrow: 'Gallery Preview',
-      title: 'A first look at the cocktails, atmosphere, and nights that shape ZAFIRO.',
+      eyebrow: 'Gallery',
+      title: 'Signature cocktails, rooftop atmosphere, and nights with their own rhythm.',
       description:
-        'A reserved visual preview for the images that will soon bring the venue, the drinks, and the mood of the place to life.',
+        'A closer look at the mood, the room, and the moments that define ZAFIRO.',
     },
     experience: {
       eyebrow: 'Experience',
@@ -111,7 +111,7 @@ const dictionaries: Record<Locale, HomeDictionary> = {
       eyebrow: 'Reservations',
       title: 'Set the plan early and arrive with the night already in motion.',
       description:
-        'Reach out on WhatsApp for reservations, availability, birthdays, and table plans.',
+        'Reserve on WhatsApp and keep Instagram close for updates, atmosphere, and direct messages.',
       button: 'Reserve on WhatsApp',
     },
     location: {
@@ -130,8 +130,8 @@ const dictionaries: Record<Locale, HomeDictionary> = {
     },
     footer: {
       eyebrow: 'ZAFIRO Bar Lounge',
-      contactLabel: 'Reservations',
-      contactDescription: 'WhatsApp remains the fastest way to reserve, ask about availability, and plan a night out.',
+      contactLabel: 'Direct line',
+      contactDescription: 'WhatsApp is the fastest way to reserve and confirm the plan.',
       socialLabel: 'Follow ZAFIRO',
       availabilityLabel: 'Florencia, Caquetá',
       availabilityDescription: 'A rooftop lounge concept built around cocktails, light bites, and polished nightlife.',
@@ -168,9 +168,9 @@ const dictionaries: Record<Locale, HomeDictionary> = {
     },
     gallery: {
       eyebrow: 'Galería',
-      title: 'Una primera mirada a los cócteles, el ambiente y las noches que definen a ZAFIRO.',
+      title: 'Cócteles de autor, atmósfera rooftop y noches con ritmo propio.',
       description:
-        'Un preview visual reservado para las imágenes que pronto mostrarán el lugar, las bebidas y el mood real de la experiencia.',
+        'Una mirada al mood, al lugar y a los momentos que definen a ZAFIRO.',
     },
     experience: {
       eyebrow: 'Experiencia',
@@ -182,7 +182,7 @@ const dictionaries: Record<Locale, HomeDictionary> = {
       eyebrow: 'Reservas',
       title: 'Define el plan con tiempo y llega con la noche ya encaminada.',
       description:
-        'Escríbenos por WhatsApp para reservas, disponibilidad, cumpleaños y planes de mesa.',
+        'Reserva por WhatsApp y mantén Instagram cerca para novedades, ambiente y mensajes directos.',
       button: 'Reserva por WhatsApp',
     },
     location: {
@@ -201,8 +201,8 @@ const dictionaries: Record<Locale, HomeDictionary> = {
     },
     footer: {
       eyebrow: 'ZAFIRO Bar Lounge',
-      contactLabel: 'Reservas',
-      contactDescription: 'WhatsApp sigue siendo la vía más rápida para reservar, consultar disponibilidad y cuadrar la noche.',
+      contactLabel: 'Contacto directo',
+      contactDescription: 'WhatsApp es la vía más rápida para reservar y dejar el plan confirmado.',
       socialLabel: 'Sigue a ZAFIRO',
       availabilityLabel: 'Florencia, Caquetá',
       availabilityDescription: 'Un rooftop lounge pensado para cócteles, cocina ligera y noches mejor puestas.',

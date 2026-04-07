@@ -146,8 +146,8 @@ export const businessInfo: BusinessInfo = {
       es: whatsappDisplay,
     },
     helper: {
-      en: 'Primary channel for reservations, availability, and celebrations.',
-      es: 'Canal principal para reservas, disponibilidad y celebraciones.',
+      en: 'Reservations, availability, and table plans in one message.',
+      es: 'Reservas, disponibilidad y planes de mesa en un solo mensaje.',
     },
   },
   secondaryCta: {
@@ -209,15 +209,15 @@ export const businessInfo: BusinessInfo = {
     {
       title: { en: 'Instagram messages', es: 'Mensajes por Instagram' },
       detail: {
-        en: '@zafirobarlounge for event questions, content discovery, and direct contact.',
-        es: '@zafirobarlounge para consultas sobre eventos, contenido y contacto directo.',
+        en: '@zafirobarlounge for direct messages and updates.',
+        es: '@zafirobarlounge para mensajes directos y novedades.',
       },
     },
     {
-      title: { en: 'Facebook presence', es: 'Presencia en Facebook' },
+      title: { en: 'TikTok', es: 'TikTok' },
       detail: {
-        en: 'Official page available for brand presence and future updates.',
-        es: 'Página oficial disponible para presencia de marca y futuras novedades.',
+        en: '@zafiro.bar.lounge for short-form nightlife content.',
+        es: '@zafiro.bar.lounge para contenido corto del ambiente y las noches.',
       },
     },
   ],
@@ -230,8 +230,8 @@ export const businessInfo: BusinessInfo = {
         es: '@zafirobarlounge',
       },
       helper: {
-        en: 'Official Instagram profile for venue atmosphere, cocktails, and event content.',
-        es: 'Perfil oficial para mostrar el ambiente del lugar, cócteles y contenido de eventos.',
+        en: 'Atmosphere, cocktails, and nights at ZAFIRO.',
+        es: 'Ambiente, cócteles y noches en ZAFIRO.',
       },
     },
     {
@@ -242,8 +242,8 @@ export const businessInfo: BusinessInfo = {
         es: 'ZAFIRO Bar Lounge',
       },
       helper: {
-        en: 'Official Facebook profile for brand presence and future updates.',
-        es: 'Perfil oficial de Facebook para presencia de marca y futuras novedades.',
+        en: 'Official page with brand presence and updates.',
+        es: 'Página oficial con presencia de marca y novedades.',
       },
     },
     {
@@ -254,20 +254,20 @@ export const businessInfo: BusinessInfo = {
         es: whatsappDisplay,
       },
       helper: {
-        en: 'Direct reservations and availability by click-to-chat.',
-        es: 'Reservas y disponibilidad por acceso directo al chat.',
+        en: 'Direct reservations and availability.',
+        es: 'Reservas y disponibilidad directas.',
       },
     },
     {
       label: { en: 'TikTok', es: 'TikTok' },
-      href: '#contact',
+      href: 'https://www.tiktok.com/@zafiro.bar.lounge',
       value: {
-        en: '[Pending official TikTok handle]',
-        es: '[Pendiente usuario oficial de TikTok]',
+        en: '@zafiro.bar.lounge',
+        es: '@zafiro.bar.lounge',
       },
       helper: {
-        en: 'Add only if the brand will actively publish short-form nightlife content here.',
-        es: 'Agregar solo si la marca va a publicar contenido corto de vida nocturna aquí.',
+        en: 'Moments, music, and nightlife in motion.',
+        es: 'Momentos, música y vida nocturna en movimiento.',
       },
     },
   ],
@@ -280,7 +280,7 @@ export const businessInfo: BusinessInfo = {
     es: 'Cócteles, cocina ligera y atmósfera rooftop para noches que sí valen la pena.',
   },
   footerNote: {
-    en: 'A premium digital front door for reservations, social discovery, and the next stage of the brand in Florencia.',
-    es: 'Una entrada digital premium para reservas, descubrimiento en redes y la siguiente etapa de la marca en Florencia.',
+    en: 'Florencia nights with cocktails, music, and a setting made to stay a little longer.',
+    es: 'Noches de Florencia con cócteles, música y un escenario para quedarse un rato más.',
   },
 };

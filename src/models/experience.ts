@@ -46,19 +46,19 @@ export const experienceHighlights: ExperienceHighlight[] = [
 
 export const galleryMoments: GalleryMoment[] = [
   {
-    title: { en: 'Signature cocktails under low light', es: 'Cócteles de autor bajo luz tenue' },
+    title: { en: 'Signature cocktails with ZAFIRO’s seal', es: 'Cócteles con el sello de ZAFIRO' },
     tag: { en: 'Cocktails', es: 'Cócteles' },
     description: {
-      en: 'A close-up look at ZAFIRO’s visual signature: polished pours, glassware, and the color of the bar after dark.',
-      es: 'Una mirada cercana a la firma visual de ZAFIRO: cócteles bien servidos, cristalería cuidada y color al caer la noche.',
+      en: 'Close-up pours, polished glassware, and the house style that sets the tone from the first round.',
+      es: 'Cócteles bien servidos, cristalería cuidada y la firma de la casa que marca el tono desde la primera ronda.',
     },
     focus: {
-      en: 'Cocktail craftsmanship and brand signature',
-      es: 'Coctelería de autor y firma visual',
+      en: 'Signature cocktails',
+      es: 'Cócteles de autor',
     },
     placeholderLabel: {
-      en: 'Reserved for featured cocktail imagery',
-      es: 'Reservado para imágenes destacadas de cócteles',
+      en: 'Signature cocktails',
+      es: 'Cócteles de autor',
     },
     accent: 'from-sapphire/35 via-cyanGlow/10 to-transparent',
     panelTone: 'from-[#182747] via-[#10131c] to-[#09090b]',
@@ -78,25 +78,25 @@ export const galleryMoments: GalleryMoment[] = [
         es: 'Cócteles de firma, en primer plano y con acabado cuidado',
       },
       description: {
-        en: 'A visual lead for the menu, glassware, garnish, and color of the house style.',
-        es: 'Una imagen protagonista para el menú, la cristalería, los garnish y el color de la casa.',
+        en: 'Cocktails that open the night with color, detail, and a clear point of view.',
+        es: 'Cócteles que abren la noche con color, detalle y una identidad clara.',
       },
     },
   },
   {
-    title: { en: 'Tables, textures, and the venue mood', es: 'Mesas, texturas y el mood del lugar' },
+    title: { en: 'Tables, textures, and rooftop mood', es: 'Mesas, texturas y mood rooftop' },
     tag: { en: 'Venue', es: 'Lugar' },
     description: {
-      en: 'The venue atmosphere comes through in the details: seating, textures, lighting, and the first impression of the night.',
-      es: 'La atmósfera del lugar se siente en los detalles: mobiliario, texturas, iluminación y la primera impresión de la noche.',
+      en: 'Lighting, seating, and interior details shape the kind of place that invites you to stay longer.',
+      es: 'La iluminación, las mesas y los detalles del lugar construyen ese ambiente que invita a quedarse un rato más.',
     },
     focus: {
-      en: 'Interior identity, seating, and lounge details',
-      es: 'Identidad interior, mobiliario y detalles lounge',
+      en: 'Venue atmosphere',
+      es: 'Ambiente del lugar',
     },
     placeholderLabel: {
-      en: 'Reserved for venue and interior photography',
-      es: 'Reservado para fotos del interior y del espacio',
+      en: 'Venue atmosphere',
+      es: 'Ambiente del lugar',
     },
     accent: 'from-amberGlow/25 via-white/5 to-transparent',
     panelTone: 'from-[#231910] via-[#14151d] to-[#09090b]',
@@ -116,25 +116,25 @@ export const galleryMoments: GalleryMoment[] = [
         es: 'Mesas, iluminación y textura lounge',
       },
       description: {
-        en: 'A polished look at seating, lighting design, and the rooftop atmosphere before the room fills up.',
-        es: 'Una mirada cuidada al mobiliario, la iluminación y la atmósfera rooftop antes de que se llene el lugar.',
+        en: 'A room with character, soft light, and the kind of setting that elevates the plan.',
+        es: 'Un lugar con carácter, luz cuidada y ese escenario que hace subir el nivel del plan.',
       },
     },
   },
   {
-    title: { en: 'Service moments made for celebrations', es: 'Momentos de servicio hechos para celebrar' },
+    title: { en: 'Celebrations, music, and shared nights', es: 'Celebraciones, música y noches compartidas' },
     tag: { en: 'Events', es: 'Eventos' },
     description: {
-      en: 'A social glimpse of birthdays, shared toasts, and the kind of nights that gather people around the table.',
-      es: 'Una mirada social a cumpleaños, brindis y noches hechas para reunirse alrededor de la mesa.',
+      en: 'Birthdays, toasts, and social energy come together in nights made to be shared around the table.',
+      es: 'Cumpleaños, brindis y energía social se encuentran en noches hechas para reunirse alrededor de la mesa.',
     },
     focus: {
-      en: 'Celebrations, social energy, and shared nights',
-      es: 'Celebraciones, energía social y noches compartidas',
+      en: 'Celebrations and social energy',
+      es: 'Celebraciones y energía social',
     },
     placeholderLabel: {
-      en: 'Reserved for event and celebration coverage',
-      es: 'Reservado para fotos de eventos y celebraciones',
+      en: 'Celebrations and social energy',
+      es: 'Celebraciones y energía social',
     },
     accent: 'from-rose-200/15 via-amberGlow/10 to-transparent',
     panelTone: 'from-[#28151b] via-[#14131a] to-[#09090b]',
@@ -154,8 +154,8 @@ export const galleryMoments: GalleryMoment[] = [
         es: 'Botellas, cumpleaños y celebración social',
       },
       description: {
-        en: 'A real glimpse of celebrations, shared energy, and the nightlife rhythm that makes the place memorable.',
-        es: 'Una vista real de celebraciones, energía compartida y el ritmo nocturno que hace memorable el lugar.',
+        en: 'Music, service, and the kind of night that feels good from the first toast to the last round.',
+        es: 'Música, servicio y ese tipo de noche que se disfruta desde el primer brindis hasta la última ronda.',
       },
     },
   },
@@ -171,8 +171,8 @@ export const galleryMoments: GalleryMoment[] = [
       es: 'Atmósfera real, momentos de clientes y ritmo nocturno',
     },
     placeholderLabel: {
-      en: 'Reserved for real ambiance and guest photography',
-      es: 'Reservado para fotos reales de ambiente y clientes',
+      en: 'Real atmosphere',
+      es: 'Atmósfera real',
     },
     accent: 'from-cyanGlow/20 via-sapphire/10 to-transparent',
     panelTone: 'from-[#10212b] via-[#11131b] to-[#09090b]',

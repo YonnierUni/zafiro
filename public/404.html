@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <title>ZAFIRO Bar Lounge</title>
+    <script>
+      (function () {
+        var pathSegmentsToKeep = 1;
+        var location = window.location;
+        var origin = location.origin;
+        var pathname = location.pathname;
+        var search = location.search;
+        var hash = location.hash;
+        var segments = pathname.split('/');
+        var basePath = segments.slice(0, 1 + pathSegmentsToKeep).join('/') || '/';
+        var redirectPath = pathname.slice(basePath.length).replace(/^\/+/, '');
+        var destination =
+          origin +
+          basePath +
+          '/?/' +
+          redirectPath +
+          (search ? '&' + search.slice(1) : '') +
+          hash;
+
+        sessionStorage.setItem('spa-github-pages-redirect', pathname + search + hash);
+        location.replace(destination);
+      })();
+    </script>
+  </head>
+  <body></body>
+</html>

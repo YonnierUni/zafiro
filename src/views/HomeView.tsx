@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import { AboutSection } from '../components/AboutSection';
 import { ContactSection } from '../components/ContactSection';
 import { ExperienceSection } from '../components/ExperienceSection';
@@ -17,6 +18,7 @@ import { getVisibleMenuItems, normalizeMenuCategory, type MenuDataItem } from '.
 const defaultLocale: Locale = 'es';
 
 export function HomeView() {
+  const location = useLocation();
   const [locale, setLocale] = useState<Locale>(defaultLocale);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [menuItems, setMenuItems] = useState<MenuDataItem[]>([]);
@@ -25,6 +27,12 @@ export function HomeView() {
   useEffect(() => {
     document.documentElement.lang = locale;
   }, [locale]);
+
+  useEffect(() => {
+    if ((location.state as { scrollToTop?: boolean } | null)?.scrollToTop) {
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    }
+  }, [location.state]);
 
   useEffect(() => {
     let isMounted = true;
@@ -103,12 +111,12 @@ export function HomeView() {
           >
             {business.primaryCta.label[locale]}
           </a>
-          <a
-            href={business.secondaryCta.href}
+          <Link
+            to="/menu"
             className="inline-flex min-h-11 flex-1 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] px-4 py-2.5 text-xs font-semibold uppercase tracking-[0.18em] text-ivory"
           >
-            {business.secondaryCta.label[locale]}
-          </a>
+            {locale === 'es' ? 'Ver carta completa' : 'View full menu'}
+          </Link>
         </div>
       </div>
     </div>

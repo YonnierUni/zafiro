@@ -31,24 +31,34 @@ export function ContactSection({ business, dictionary, locale }: ContactSectionP
             </h2>
             <p className="mt-4 hidden text-sm leading-7 text-mist sm:block sm:text-base">{dictionary.contact.description}</p>
             <div className="mt-4 grid gap-3 sm:mt-5 sm:grid-cols-2">
-              <div className="interactive-card rounded-2xl border border-white/10 bg-obsidian/45 px-4 py-3">
+              <a
+                href={business.primaryCta.href}
+                target="_blank"
+                rel="noreferrer"
+                className="interactive-card group rounded-2xl border border-white/10 bg-obsidian/45 px-4 py-3"
+              >
                 <div className="flex items-center gap-2 text-cyanGlow/80">
                   <SocialIcon kind="whatsapp" />
                   <p className="text-[0.68rem] font-semibold uppercase tracking-[0.24em]">
                     {business.primaryCta.label[locale]}
                   </p>
                 </div>
-                <p className="mt-2 text-sm text-ivory">{business.primaryCta.value?.[locale]}</p>
+                <p className="mt-2 text-sm text-ivory transition group-hover:text-ivory/90">{business.primaryCta.value?.[locale]}</p>
                 <p className="mt-2 hidden text-sm text-mist sm:block">{business.primaryCta.helper?.[locale]}</p>
-              </div>
-              <div className="interactive-card rounded-2xl border border-white/10 bg-obsidian/45 px-4 py-3">
+              </a>
+              <a
+                href={instagramProfile?.href}
+                target="_blank"
+                rel="noreferrer"
+                className="interactive-card group rounded-2xl border border-white/10 bg-obsidian/45 px-4 py-3"
+              >
                 <div className="flex items-center gap-2 text-amberGlow">
                   <SocialIcon kind="instagram" />
                   <p className="text-[0.68rem] font-semibold uppercase tracking-[0.24em]">Instagram</p>
                 </div>
-                <p className="mt-2 text-sm text-ivory">{instagramProfile?.value[locale]}</p>
+                <p className="mt-2 text-sm text-ivory transition group-hover:text-ivory/90">{instagramProfile?.value[locale]}</p>
                 <p className="mt-2 hidden text-sm text-mist sm:block">{instagramProfile?.helper[locale]}</p>
-              </div>
+              </a>
             </div>
           </div>
           <a

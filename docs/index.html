@@ -47,9 +47,23 @@
       href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
+    <script>
+      (function () {
+        var redirect = sessionStorage.getItem('spa-github-pages-redirect');
+
+        if (!redirect) return;
+
+        sessionStorage.removeItem('spa-github-pages-redirect');
+
+        var redirectUrl = new URL(redirect, window.location.origin);
+        var targetPath = redirectUrl.pathname + redirectUrl.search + redirectUrl.hash;
+
+        window.history.replaceState(null, '', targetPath);
+      })();
+    </script>
     <title>ZAFIRO Bar Lounge | Rooftop Lounge Bar en Florencia, Caqueta</title>
-    <script type="module" crossorigin src="/zafiro/assets/index-cgnKUYKc.js"></script>
-    <link rel="stylesheet" crossorigin href="/zafiro/assets/index-B3IQZowU.css">
+    <script type="module" crossorigin src="/zafiro/assets/index-JeEoJCbE.js"></script>
+    <link rel="stylesheet" crossorigin href="/zafiro/assets/index-DzfA6mI4.css">
   </head>
   <body>
     <div id="root"></div>

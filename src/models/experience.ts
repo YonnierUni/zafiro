@@ -46,19 +46,19 @@ export const experienceHighlights: ExperienceHighlight[] = [
 
 export const galleryMoments: GalleryMoment[] = [
   {
-    title: { en: 'The signature in every glass', es: 'La firma en cada copa' },
+    title: { en: 'Visual signature', es: 'Firma visual' },
     tag: { en: 'Cocktails', es: 'Cócteles' },
     description: {
-      en: 'Color, detail, and pours made to set the tone from the first round.',
-      es: 'Color, detalle y tragos que marcan el tono desde la primera ronda.',
+      en: 'Light, texture, and details that make ZAFIRO recognizable at first glance.',
+      es: 'Luz, textura y detalles que hacen reconocible a ZAFIRO desde el primer vistazo.',
     },
     focus: {
-      en: 'Brand mood',
-      es: 'Mood de marca',
+      en: 'Identity',
+      es: 'Identidad',
     },
     placeholderLabel: {
-      en: 'Brand mood',
-      es: 'Mood de marca',
+      en: 'Identity',
+      es: 'Identidad',
     },
     accent: 'from-sapphire/35 via-cyanGlow/10 to-transparent',
     panelTone: 'from-[#182747] via-[#10131c] to-[#09090b]',
@@ -78,8 +78,8 @@ export const galleryMoments: GalleryMoment[] = [
         es: 'Cócteles de firma, en primer plano y con acabado cuidado',
       },
       description: {
-        en: 'A house style with polish, character, and a clear point of view.',
-        es: 'Una casa con estilo, carácter y una identidad muy clara.',
+        en: 'A signature you recognize the moment you walk in.',
+        es: 'Un sello que se reconoce al entrar.',
       },
     },
   },

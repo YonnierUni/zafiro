@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import zafiroLogoWhite from '../assets/zafiro-logo-white.png';
 import type { HomeDictionary } from '../controllers/homeController';
 import type { BusinessInfo, Locale } from '../models/business';
@@ -24,7 +25,7 @@ export function NavBar({
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const navItems = [
     { label: dictionary.nav.about, href: '#about' },
-    { label: dictionary.nav.menu, href: '#menu' },
+    { label: dictionary.nav.menu, href: '/menu', isRoute: true },
     { label: dictionary.nav.gallery, href: '#gallery' },
     { label: dictionary.nav.experience, href: '#experience' },
     { label: dictionary.nav.contact, href: '#contact' },
@@ -63,9 +64,15 @@ export function NavBar({
         </a>
         <nav className="hidden items-center gap-6 text-sm text-mist md:flex">
           {navItems.map((item) => (
-            <a key={item.label} href={item.href} className="interactive-link transition hover:text-ivory">
-              {item.label}
-            </a>
+            item.isRoute ? (
+              <Link key={item.label} to={item.href} className="interactive-link transition hover:text-ivory">
+                {item.label}
+              </Link>
+            ) : (
+              <a key={item.label} href={item.href} className="interactive-link transition hover:text-ivory">
+                {item.label}
+              </a>
+            )
           ))}
         </nav>
         <div className="flex items-center gap-3">
@@ -167,18 +174,32 @@ export function NavBar({
 
                 <nav className="flex flex-col gap-2">
                   {navItems.map((item, index) => (
-                    <motion.a
+                    <motion.div
                       key={item.label}
-                      href={item.href}
                       initial={{ opacity: 0, x: -12 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: 0.04 * index, duration: 0.22 }}
-                      onClick={closeMobileMenu}
-                      className="interactive-card flex items-center justify-between rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3 text-sm font-medium text-ivory transition hover:border-cyanGlow/30 hover:bg-white/[0.06]"
                     >
-                      <span>{item.label}</span>
-                      <span className="text-cyanGlow/75">/</span>
-                    </motion.a>
+                      {item.isRoute ? (
+                        <Link
+                          to={item.href}
+                          onClick={closeMobileMenu}
+                          className="interactive-card flex items-center justify-between rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3 text-sm font-medium text-ivory transition hover:border-cyanGlow/30 hover:bg-white/[0.06]"
+                        >
+                          <span>{item.label}</span>
+                          <span className="text-cyanGlow/75">/</span>
+                        </Link>
+                      ) : (
+                        <a
+                          href={item.href}
+                          onClick={closeMobileMenu}
+                          className="interactive-card flex items-center justify-between rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3 text-sm font-medium text-ivory transition hover:border-cyanGlow/30 hover:bg-white/[0.06]"
+                        >
+                          <span>{item.label}</span>
+                          <span className="text-cyanGlow/75">/</span>
+                        </a>
+                      )}
+                    </motion.div>
                   ))}
                 </nav>
 

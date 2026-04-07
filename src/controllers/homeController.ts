@@ -31,6 +31,9 @@ export interface HomeDictionary {
     title: string;
     description: string;
     categoryEyebrow: string;
+    groupFilterLabel: string;
+    subgroupFilterLabel: string;
+    allFilter: string;
   };
   gallery: {
     eyebrow: string;
@@ -94,7 +97,7 @@ const dictionaries: Record<Locale, HomeDictionary> = {
       ],
     },
     menu: {
-      eyebrow: 'Featured Menu',
+      eyebrow: 'Bar Selection',
       title: 'A focused menu preview with signature drinks, fresh mixes, and celebration-ready pours.',
       description:
         "A curated selection of house favorites, tropical freshness, and visual standouts that communicate the bar's premium identity at a glance.",
@@ -105,6 +108,9 @@ const dictionaries: Record<Locale, HomeDictionary> = {
       title: 'The full menu, grouped for an easy read between cocktails, drinks, and light food.',
       description: 'Browse the full selection served at ZAFIRO.',
       categoryEyebrow: 'Category',
+      groupFilterLabel: 'Browse by',
+      subgroupFilterLabel: 'Subgroup',
+      allFilter: 'All',
     },
     gallery: {
       eyebrow: 'Gallery',
@@ -168,7 +174,7 @@ const dictionaries: Record<Locale, HomeDictionary> = {
       ],
     },
     menu: {
-      eyebrow: 'Menú destacado',
+      eyebrow: 'Selección del bar',
       title: 'Una selección breve del menú, con tragos de firma, mezclas frescas y opciones para celebrar.',
       description:
         'Una curaduría de la casa con cócteles de autor, perfiles tropicales y presentaciones que dejan ver de inmediato la identidad premium del bar.',
@@ -179,6 +185,9 @@ const dictionaries: Record<Locale, HomeDictionary> = {
       title: 'La carta completa, organizada para recorrer cócteles, bebidas y cocina ligera con facilidad.',
       description: 'Explora la selección completa que se sirve en ZAFIRO.',
       categoryEyebrow: 'Categoría',
+      groupFilterLabel: 'Explorar por',
+      subgroupFilterLabel: 'Subgrupo',
+      allFilter: 'Todos',
     },
     gallery: {
       eyebrow: 'Galería',

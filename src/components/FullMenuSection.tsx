@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion';
+import { useEffect, useMemo, useState } from 'react';
 import type { HomeDictionary } from '../controllers/homeController';
 import type { Locale } from '../models/business';
 import {
@@ -20,9 +21,26 @@ interface FullMenuSectionProps {
 }
 
 const categoryOrder: MenuCategory[] = ['cocteles', 'bebidas', 'comida'];
+type MenuFilter = 'all' | MenuCategory;
 
 export function FullMenuSection({ items, dictionary, locale }: FullMenuSectionProps) {
   const groupedItems = groupMenuItemsByTypeAndSubgroup(items);
+  const [selectedCategory, setSelectedCategory] = useState<MenuFilter>('all');
+  const [selectedSubgroup, setSelectedSubgroup] = useState<string>('all');
+
+  const availableSubgroups = useMemo(() => {
+    if (selectedCategory === 'all') {
+      return [];
+    }
+
+    return groupedItems[selectedCategory].map((group) => group.subgroup);
+  }, [groupedItems, selectedCategory]);
+
+  useEffect(() => {
+    setSelectedSubgroup('all');
+  }, [selectedCategory]);
+
+  const visibleCategories = selectedCategory === 'all' ? categoryOrder : [selectedCategory];
 
   return (
     <section id="full-menu" className="mx-auto max-w-7xl px-5 py-12 sm:px-6 sm:py-24 lg:px-8 xl:max-w-[90rem] 2xl:px-10">
@@ -32,11 +50,63 @@ export function FullMenuSection({ items, dictionary, locale }: FullMenuSectionPr
         description={dictionary.fullMenu.description}
       />
 
-      <div className="mt-8 space-y-8 sm:mt-12 sm:space-y-10">
-        {categoryOrder.map((category) => {
-          const categoryGroups = groupedItems[category];
+      <div className="mt-8 rounded-[1.75rem] border border-white/10 bg-white/[0.03] p-4 sm:mt-10 sm:p-5">
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-3">
+            <p className="text-[0.68rem] uppercase tracking-[0.28em] text-cyanGlow/80">
+              {dictionary.fullMenu.groupFilterLabel}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <FilterPill
+                active={selectedCategory === 'all'}
+                onClick={() => setSelectedCategory('all')}
+                label={dictionary.fullMenu.allFilter}
+              />
+              {categoryOrder.map((category) => (
+                <FilterPill
+                  key={category}
+                  active={selectedCategory === category}
+                  onClick={() => setSelectedCategory(category)}
+                  label={getLocalizedCategoryLabel(category, locale)}
+                />
+              ))}
+            </div>
+          </div>
 
-          if (!categoryGroups.length) {
+          {selectedCategory !== 'all' && availableSubgroups.length ? (
+            <div className="flex flex-col gap-3 border-t border-white/10 pt-4">
+              <p className="text-[0.68rem] uppercase tracking-[0.28em] text-amberGlow">
+                {dictionary.fullMenu.subgroupFilterLabel}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <FilterPill
+                  active={selectedSubgroup === 'all'}
+                  onClick={() => setSelectedSubgroup('all')}
+                  label={dictionary.fullMenu.allFilter}
+                />
+                {availableSubgroups.map((subgroup) => (
+                  <FilterPill
+                    key={subgroup}
+                    active={selectedSubgroup === subgroup}
+                    onClick={() => setSelectedSubgroup(subgroup)}
+                    label={subgroup}
+                  />
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="mt-8 space-y-8 sm:mt-10 sm:space-y-10">
+        {visibleCategories.map((category) => {
+          const categoryGroups = groupedItems[category];
+          const filteredGroups =
+            selectedSubgroup === 'all'
+              ? categoryGroups
+              : categoryGroups.filter((group) => group.subgroup === selectedSubgroup);
+
+          if (!filteredGroups.length) {
             return null;
           }
 
@@ -55,13 +125,13 @@ export function FullMenuSection({ items, dictionary, locale }: FullMenuSectionPr
                   </h3>
                 </div>
                 <span className="w-fit rounded-full border border-white/10 bg-obsidian/45 px-3 py-1.5 text-[0.68rem] uppercase tracking-[0.24em] text-amberGlow">
-                  {categoryGroups.reduce((total, group) => total + group.items.length, 0)}{' '}
+                  {filteredGroups.reduce((total, group) => total + group.items.length, 0)}{' '}
                   {locale === 'es' ? 'opciones' : 'items'}
                 </span>
               </div>
 
               <div className="mt-5 space-y-5">
-                {categoryGroups.map((group) => (
+                {filteredGroups.map((group) => (
                   <div key={`${category}-${group.subgroup}`} className="space-y-4">
                     <div className="flex items-center gap-3">
                       <span className="h-px flex-1 bg-gradient-to-r from-white/10 to-transparent" />
@@ -125,5 +195,27 @@ export function FullMenuSection({ items, dictionary, locale }: FullMenuSectionPr
         })}
       </div>
     </section>
+  );
+}
+
+interface FilterPillProps {
+  active: boolean;
+  label: string;
+  onClick: () => void;
+}
+
+function FilterPill({ active, label, onClick }: FilterPillProps) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`interactive-button rounded-full border px-3 py-2 text-[0.68rem] font-semibold uppercase tracking-[0.22em] transition sm:px-4 ${
+        active
+          ? 'border-cyanGlow/45 bg-cyanGlow/12 text-ivory'
+          : 'border-white/10 bg-white/[0.03] text-mist hover:border-cyanGlow/30 hover:text-ivory'
+      }`}
+    >
+      {label}
+    </button>
   );
 }

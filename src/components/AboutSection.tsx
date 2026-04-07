@@ -11,8 +11,8 @@ interface AboutSectionProps {
 
 export function AboutSection({ business, dictionary, locale }: AboutSectionProps) {
   return (
-    <section id="about" className="mx-auto max-w-7xl px-5 py-20 sm:px-6 sm:py-24 lg:px-8 xl:max-w-[90rem] 2xl:px-10">
-      <div className="grid gap-8 lg:grid-cols-12 lg:gap-10 xl:gap-12">
+    <section id="about" className="mx-auto max-w-7xl px-5 py-12 sm:px-6 sm:py-24 lg:px-8 xl:max-w-[90rem] 2xl:px-10">
+      <div className="grid gap-6 lg:grid-cols-12 lg:gap-10 xl:gap-12">
         <div className="lg:col-span-5 xl:col-span-4">
           <SectionHeading
             eyebrow={dictionary.about.eyebrow}

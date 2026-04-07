@@ -13,7 +13,7 @@ export function Footer({ business, dictionary, locale }: FooterProps) {
   const socialProfiles = business.socialProfiles.filter((profile) => profile.label.en !== 'WhatsApp');
 
   return (
-    <footer className="border-t border-white/10">
+    <footer className="border-t border-white/10 pb-[calc(7.5rem+env(safe-area-inset-bottom))] md:pb-0">
       <div className="mx-auto grid max-w-7xl gap-8 px-5 py-10 sm:px-6 lg:px-8 xl:max-w-[90rem] xl:grid-cols-12 xl:gap-6 2xl:px-10">
         <div className="interactive-card rounded-[1.75rem] border border-white/10 bg-[radial-gradient(circle_at_top_left,_rgba(36,107,255,0.18),_transparent_32%),rgba(255,255,255,0.03)] p-6 xl:col-span-5 xl:p-8">
           <p className="text-xs font-semibold uppercase tracking-[0.35em] text-cyanGlow/80">

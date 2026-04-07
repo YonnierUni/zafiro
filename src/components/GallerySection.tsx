@@ -15,14 +15,14 @@ export function GallerySection({ gallery, dictionary, locale }: GallerySectionPr
   const curatedGallery = gallery.slice(0, 3);
 
   return (
-    <section id="gallery" className="mx-auto max-w-7xl px-5 py-24 sm:px-6 lg:px-8 xl:max-w-[90rem] 2xl:px-10">
+    <section id="gallery" className="mx-auto max-w-7xl px-5 py-12 sm:px-6 sm:py-24 lg:px-8 xl:max-w-[90rem] 2xl:px-10">
       <SectionHeading
         eyebrow={dictionary.gallery.eyebrow}
         title={dictionary.gallery.title}
         description={dictionary.gallery.description}
       />
 
-      <div className="mt-12 grid gap-5 lg:grid-cols-12 lg:grid-rows-[minmax(19rem,1fr)_minmax(17rem,1fr)] xl:mt-14 xl:gap-6 xl:grid-rows-[minmax(20rem,1fr)_minmax(18rem,1fr)]">
+      <div className="mt-6 grid gap-4 lg:grid-cols-12 lg:grid-rows-[minmax(19rem,1fr)_minmax(17rem,1fr)] xl:mt-14 xl:gap-6 xl:grid-rows-[minmax(20rem,1fr)_minmax(18rem,1fr)]">
         {curatedGallery.map((item, index) => (
           <motion.div
             key={item.title.en}
@@ -34,9 +34,9 @@ export function GallerySection({ gallery, dictionary, locale }: GallerySectionPr
               item.layout,
             )}`}
           >
-            <div className={`relative h-full min-h-[320px] overflow-hidden rounded-[1.95rem] bg-gradient-to-br ${item.panelTone} p-6 sm:p-8 xl:p-9`}>
+            <div className={`relative h-full min-h-[280px] overflow-hidden rounded-[1.95rem] bg-gradient-to-br ${item.panelTone} p-5 sm:min-h-[320px] sm:p-8 xl:p-9`}>
               <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(36,107,255,0.22),_transparent_26%),radial-gradient(circle_at_85%_20%,_rgba(214,165,93,0.18),_transparent_20%),linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0))]" />
-              <div className="absolute inset-5 rounded-[1.45rem] border border-white/10 opacity-70" />
+              <div className="absolute inset-4 rounded-[1.45rem] border border-white/10 opacity-60 sm:inset-5 sm:opacity-70" />
               <div className="absolute -right-12 top-8 h-32 w-32 rounded-full border border-cyanGlow/15 bg-cyanGlow/10 blur-2xl transition duration-500 group-hover:scale-110" />
 
               <div className="relative flex h-full flex-col justify-between">
@@ -46,15 +46,15 @@ export function GallerySection({ gallery, dictionary, locale }: GallerySectionPr
                   </span>
                 </div>
 
-                <div className={`mt-8 grid gap-5 lg:items-end ${getGalleryInnerGridClasses(item.layout)}`}>
+                <div className={`mt-5 grid gap-4 sm:mt-8 sm:gap-5 lg:items-end ${getGalleryInnerGridClasses(item.layout)}`}>
                   <div className={item.layout === 'hero' ? 'max-w-[36rem]' : 'max-w-[34rem]'}>
-                    <p className="text-xs font-semibold uppercase tracking-[0.3em] text-amberGlow/85">
+                    <p className="hidden text-xs font-semibold uppercase tracking-[0.3em] text-amberGlow/85 sm:block">
                       {item.focus[locale]}
                     </p>
-                    <h3 className={`mt-4 font-display leading-tight text-ivory ${item.layout === 'hero' ? 'text-4xl sm:text-[2.9rem] xl:text-[3.4rem]' : 'text-4xl sm:text-[2.7rem]'}`}>
+                    <h3 className={`mt-2 font-display leading-tight text-ivory sm:mt-4 ${item.layout === 'hero' ? 'text-[2.2rem] sm:text-[2.9rem] xl:text-[3.4rem]' : 'text-[2.1rem] sm:text-[2.7rem]'}`}>
                       {item.title[locale]}
                     </h3>
-                    <p className={`mt-4 max-w-2xl text-sm leading-7 text-mist sm:text-base ${item.layout === 'hero' ? 'xl:text-[1.02rem] xl:leading-8' : ''}`}>
+                    <p className={`mt-3 max-w-2xl text-sm leading-6 text-mist sm:text-base sm:leading-7 ${item.layout === 'hero' ? 'xl:text-[1.02rem] xl:leading-8' : ''}`}>
                       {item.description[locale]}
                     </p>
                   </div>
@@ -72,7 +72,7 @@ export function GallerySection({ gallery, dictionary, locale }: GallerySectionPr
                   />
                 </div>
 
-                <div className="mt-8 border-t border-white/10 pt-4 xl:mt-10">
+                <div className="mt-5 hidden border-t border-white/10 pt-4 sm:block xl:mt-10">
                   <p className="max-w-xl text-sm leading-7 text-mist/85">{item.media.description[locale]}</p>
                 </div>
               </div>

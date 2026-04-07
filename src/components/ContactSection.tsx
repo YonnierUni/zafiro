@@ -13,24 +13,24 @@ export function ContactSection({ business, dictionary, locale }: ContactSectionP
   const instagramProfile = business.socialProfiles.find((profile) => profile.label.en === 'Instagram');
 
   return (
-    <section id="contact" className="mx-auto max-w-7xl px-5 py-20 sm:px-6 sm:py-24 lg:px-8">
+    <section id="contact" className="mx-auto max-w-7xl px-5 py-12 sm:px-6 sm:py-24 lg:px-8">
       <motion.div
         initial={{ opacity: 0, y: 24 }}
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true, amount: 0.3 }}
         transition={{ duration: 0.7 }}
-        className="interactive-card overflow-hidden rounded-[2rem] border border-white/10 bg-[radial-gradient(circle_at_top,_rgba(36,107,255,0.28),_transparent_35%),linear-gradient(135deg,_rgba(255,255,255,0.08),_rgba(255,255,255,0.03))] p-6 shadow-glow sm:p-10"
+        className="interactive-card overflow-hidden rounded-[2rem] border border-white/10 bg-[radial-gradient(circle_at_top,_rgba(36,107,255,0.28),_transparent_35%),linear-gradient(135deg,_rgba(255,255,255,0.08),_rgba(255,255,255,0.03))] p-5 shadow-glow sm:p-10"
       >
         <p className="text-[0.68rem] uppercase tracking-[0.3em] text-cyanGlow/80 sm:text-xs sm:tracking-[0.35em]">
           {dictionary.contact.eyebrow}
         </p>
-        <div className="mt-5 flex flex-col gap-6 lg:mt-6 lg:flex-row lg:items-end lg:justify-between lg:gap-8">
+        <div className="mt-4 flex flex-col gap-5 lg:mt-6 lg:flex-row lg:items-end lg:justify-between lg:gap-8">
           <div className="max-w-2xl">
             <h2 className="font-display text-[2.8rem] leading-[0.94] text-ivory sm:text-6xl">
               {dictionary.contact.title}
             </h2>
-            <p className="mt-5 text-sm leading-7 text-mist sm:text-base">{dictionary.contact.description}</p>
-            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+            <p className="mt-4 hidden text-sm leading-7 text-mist sm:block sm:text-base">{dictionary.contact.description}</p>
+            <div className="mt-4 grid gap-3 sm:mt-5 sm:grid-cols-2">
               <div className="interactive-card rounded-2xl border border-white/10 bg-obsidian/45 px-4 py-3">
                 <div className="flex items-center gap-2 text-cyanGlow/80">
                   <SocialIcon kind="whatsapp" />
@@ -39,7 +39,7 @@ export function ContactSection({ business, dictionary, locale }: ContactSectionP
                   </p>
                 </div>
                 <p className="mt-2 text-sm text-ivory">{business.primaryCta.value?.[locale]}</p>
-                <p className="mt-2 text-sm text-mist">{business.primaryCta.helper?.[locale]}</p>
+                <p className="mt-2 hidden text-sm text-mist sm:block">{business.primaryCta.helper?.[locale]}</p>
               </div>
               <div className="interactive-card rounded-2xl border border-white/10 bg-obsidian/45 px-4 py-3">
                 <div className="flex items-center gap-2 text-amberGlow">
@@ -47,7 +47,7 @@ export function ContactSection({ business, dictionary, locale }: ContactSectionP
                   <p className="text-[0.68rem] font-semibold uppercase tracking-[0.24em]">Instagram</p>
                 </div>
                 <p className="mt-2 text-sm text-ivory">{instagramProfile?.value[locale]}</p>
-                <p className="mt-2 text-sm text-mist">{instagramProfile?.helper[locale]}</p>
+                <p className="mt-2 hidden text-sm text-mist sm:block">{instagramProfile?.helper[locale]}</p>
               </div>
             </div>
           </div>

@@ -12,8 +12,8 @@ interface ExperienceSectionProps {
 
 export function ExperienceSection({ highlights, dictionary, locale }: ExperienceSectionProps) {
   return (
-    <section id="experience" className="mx-auto max-w-7xl px-5 py-20 sm:px-6 sm:py-24 lg:px-8 xl:max-w-[90rem] 2xl:px-10">
-      <div className="grid gap-8 lg:grid-cols-12 lg:gap-10 xl:gap-12">
+    <section id="experience" className="mx-auto max-w-7xl px-5 py-12 sm:px-6 sm:py-24 lg:px-8 xl:max-w-[90rem] 2xl:px-10">
+      <div className="grid gap-6 lg:grid-cols-12 lg:gap-10 xl:gap-12">
         <div className="lg:col-span-4">
           <SectionHeading
             eyebrow={dictionary.experience.eyebrow}
@@ -22,7 +22,7 @@ export function ExperienceSection({ highlights, dictionary, locale }: Experience
           />
         </div>
 
-        <div className="grid gap-4 sm:gap-5 lg:col-span-8 lg:grid-cols-8 lg:grid-rows-[minmax(14rem,1fr)_minmax(12rem,1fr)] xl:gap-6">
+        <div className="grid gap-3.5 sm:gap-5 lg:col-span-8 lg:grid-cols-8 lg:grid-rows-[minmax(14rem,1fr)_minmax(12rem,1fr)] xl:gap-6">
           {highlights.map((item, index) => (
             <motion.article
               key={item.title.en}

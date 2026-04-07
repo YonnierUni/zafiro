@@ -11,14 +11,16 @@ interface MenuSectionProps {
 }
 
 export function MenuSection({ items, dictionary, locale }: MenuSectionProps) {
+  const mobileFeaturedCount = 4;
+
   return (
-    <section id="menu" className="mx-auto max-w-7xl px-5 py-20 sm:px-6 sm:py-24 lg:px-8 xl:max-w-[90rem] 2xl:px-10">
+    <section id="menu" className="mx-auto max-w-7xl px-5 py-12 sm:px-6 sm:py-24 lg:px-8 xl:max-w-[90rem] 2xl:px-10">
       <SectionHeading
         eyebrow={dictionary.menu.eyebrow}
         title={dictionary.menu.title}
         description={dictionary.menu.description}
       />
-      <div className="mt-10 grid gap-4 sm:mt-12 sm:gap-5 md:grid-cols-2 xl:grid-cols-12 xl:auto-rows-[minmax(17rem,_1fr)]">
+      <div className="mt-6 grid gap-4 sm:mt-12 sm:gap-5 md:grid-cols-2 xl:grid-cols-12 xl:auto-rows-[minmax(17rem,_1fr)]">
         {items.map((item, index) => (
           <motion.article
             key={item.name}
@@ -26,7 +28,7 @@ export function MenuSection({ items, dictionary, locale }: MenuSectionProps) {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, amount: 0.2 }}
             transition={{ duration: 0.55, delay: index * 0.06 }}
-            className={`interactive-card rounded-[1.75rem] border border-white/10 bg-gradient-to-br ${item.accent} p-[1px] ${getMenuLayoutClasses(index)}`}
+            className={`interactive-card rounded-[1.75rem] border border-white/10 bg-gradient-to-br ${item.accent} p-[1px] ${index >= mobileFeaturedCount ? 'hidden md:block' : ''} ${getMenuLayoutClasses(index)}`}
           >
             <div className="h-full overflow-hidden rounded-[1.7rem] bg-midnight/90">
               <div className={`relative overflow-hidden border-b border-white/10 bg-obsidian ${getMenuImageAspectClasses(index)}`}>
@@ -47,7 +49,7 @@ export function MenuSection({ items, dictionary, locale }: MenuSectionProps) {
                 </div>
               </div>
 
-              <div className="p-5 sm:p-6">
+              <div className="p-4 sm:p-6">
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <h3 className={`font-display leading-none text-ivory ${index === 0 ? 'text-[2.15rem] sm:text-[2.4rem] xl:text-[2.8rem]' : 'text-[2rem] sm:text-3xl'}`}>
@@ -55,11 +57,13 @@ export function MenuSection({ items, dictionary, locale }: MenuSectionProps) {
                     </h3>
                   </div>
                 </div>
-                <p className={`mt-4 text-sm leading-7 text-mist ${index === 0 ? 'xl:max-w-[42ch] xl:text-[1.02rem] xl:leading-8' : ''}`}>
+                <p
+                  className={`mt-3 text-sm leading-7 text-mist ${index === 0 ? 'xl:max-w-[42ch] xl:text-[1.02rem] xl:leading-8' : 'hidden sm:block'}`}
+                >
                   {item.description[locale]}
                 </p>
                 {item.variants ? (
-                  <div className="interactive-card mt-5 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm leading-7 text-mist">
+                  <div className="interactive-card mt-5 hidden rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm leading-7 text-mist sm:block">
                     <p className="text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-amberGlow">
                       {locale === 'es' ? 'Variantes' : 'Variants'}
                     </p>
@@ -71,8 +75,11 @@ export function MenuSection({ items, dictionary, locale }: MenuSectionProps) {
           </motion.article>
         ))}
       </div>
-      <div className="mt-6 flex items-center justify-between gap-4 border-t border-white/10 pt-5 xl:mt-8">
+      <div className="mt-5 flex items-center justify-between gap-4 border-t border-white/10 pt-4 xl:mt-8">
         <p className="max-w-2xl text-sm leading-7 text-mist">{dictionary.menu.note}</p>
+        <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[0.64rem] uppercase tracking-[0.24em] text-cyanGlow/80 md:hidden">
+          {mobileFeaturedCount} {locale === 'es' ? 'destacados' : 'featured'}
+        </div>
         <div className="hidden rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-[0.68rem] uppercase tracking-[0.26em] text-cyanGlow/80 lg:block">
           {items.length} {locale === 'es' ? 'selecciones destacadas' : 'featured selections'}
         </div>

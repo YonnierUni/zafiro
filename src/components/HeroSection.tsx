@@ -18,37 +18,37 @@ export function HeroSection({ business, metrics, dictionary, locale }: HeroSecti
       <div className="pointer-events-none absolute left-[6%] top-44 hidden h-52 w-52 rounded-full bg-amberGlow/8 blur-3xl xl:block" />
       <div className="absolute inset-x-0 top-14 h-px bg-gradient-to-r from-transparent via-cyanGlow/40 to-transparent" />
 
-      <div className="mx-auto grid min-h-[84vh] max-w-7xl items-center gap-8 px-5 py-12 sm:px-6 sm:py-16 lg:min-h-[92vh] lg:grid-cols-[minmax(0,1.02fr)_minmax(32rem,0.98fr)] lg:gap-12 lg:px-8 xl:min-h-[96vh] xl:max-w-[90rem] xl:gap-16 2xl:px-10">
+      <div className="mx-auto grid min-h-[84vh] max-w-7xl items-center gap-6 px-5 py-10 sm:px-6 sm:py-16 lg:min-h-[92vh] lg:grid-cols-[minmax(0,1.02fr)_minmax(32rem,0.98fr)] lg:gap-12 lg:px-8 xl:min-h-[96vh] xl:max-w-[90rem] xl:gap-16 2xl:px-10">
         <motion.div
           initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, ease: 'easeOut' }}
           className="relative z-10 lg:pr-4 xl:pr-8"
         >
-          <p className="mb-3 text-[0.68rem] font-semibold uppercase tracking-[0.32em] text-amberGlow/85 sm:mb-4 sm:text-xs sm:tracking-[0.38em]">
+          <p className="hidden text-[0.68rem] font-semibold uppercase tracking-[0.32em] text-amberGlow/85 sm:mb-4 sm:block sm:text-xs sm:tracking-[0.38em]">
             {business.heroOverline[locale]}
           </p>
-          <span className="inline-flex rounded-full border border-white/10 bg-white/5 px-4 py-2 text-[0.68rem] uppercase tracking-[0.28em] text-cyanGlow/80 shadow-glow sm:text-xs sm:tracking-[0.3em]">
+          <span className="hidden rounded-full border border-white/10 bg-white/5 px-4 py-2 text-[0.68rem] uppercase tracking-[0.28em] text-cyanGlow/80 shadow-glow sm:inline-flex sm:text-xs sm:tracking-[0.3em]">
             {business.badge[locale]}
           </span>
 
-          <h1 className="mt-5 max-w-3xl font-display text-[3.3rem] leading-[0.9] text-ivory sm:mt-6 sm:text-7xl lg:max-w-[14ch] lg:text-[5.4rem] xl:max-w-[13ch] xl:text-[6.4rem]">
+          <h1 className="mt-2 max-w-3xl font-display text-[3rem] leading-[0.9] text-ivory sm:mt-6 sm:text-7xl lg:max-w-[14ch] lg:text-[5.4rem] xl:max-w-[13ch] xl:text-[6.4rem]">
             {business.name}
           </h1>
 
-          <p className="mt-3 max-w-xl text-[0.68rem] font-semibold uppercase tracking-[0.28em] text-cyanGlow/80 sm:mt-4 sm:text-sm sm:tracking-[0.34em] xl:max-w-2xl">
+          <p className="hidden max-w-xl text-[0.68rem] font-semibold uppercase tracking-[0.28em] text-cyanGlow/80 sm:mt-4 sm:block sm:text-sm sm:tracking-[0.34em] xl:max-w-2xl">
             {business.tagline[locale]}
           </p>
 
-          <p className="mt-5 max-w-xl text-[1rem] leading-7 text-mist sm:mt-6 sm:text-lg sm:leading-8 lg:max-w-2xl xl:text-[1.2rem] xl:leading-9">
+          <p className="mt-4 max-w-xl text-[0.98rem] leading-7 text-mist sm:mt-6 sm:text-lg sm:leading-8 lg:max-w-2xl xl:text-[1.2rem] xl:leading-9">
             {business.headline[locale]}
           </p>
 
-          <p className="mt-3 max-w-xl text-sm leading-7 text-mist/90 sm:mt-4 sm:text-base lg:max-w-[42rem] xl:text-[1.02rem] xl:leading-8">
+          <p className="mt-3 hidden max-w-xl text-sm leading-7 text-mist/90 sm:mt-4 sm:block sm:text-base lg:max-w-[42rem] xl:text-[1.02rem] xl:leading-8">
             {business.description[locale]}
           </p>
 
-          <div className="mt-7 flex flex-col gap-3 sm:mt-8 sm:flex-row sm:gap-4 xl:mt-9">
+          <div className="mt-6 flex flex-col gap-3 sm:mt-8 sm:flex-row sm:gap-4 xl:mt-9">
             <a
               href={business.primaryCta.href}
               target="_blank"
@@ -65,7 +65,7 @@ export function HeroSection({ business, metrics, dictionary, locale }: HeroSecti
             </a>
           </div>
 
-          <div className="mt-5 grid gap-3 sm:mt-6 sm:max-w-xl sm:grid-cols-2 lg:max-w-2xl xl:mt-8">
+          <div className="mt-5 hidden gap-3 sm:mt-6 sm:grid sm:max-w-xl sm:grid-cols-2 lg:max-w-2xl xl:mt-8">
             <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 backdrop-blur-sm xl:px-5 xl:py-4">
               <p className="text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-cyanGlow/80">
                 {business.primaryCta.label[locale]}
@@ -81,7 +81,7 @@ export function HeroSection({ business, metrics, dictionary, locale }: HeroSecti
             </div>
           </div>
 
-          <div className="mt-4 grid gap-3 sm:grid-cols-3 lg:max-w-2xl xl:mt-6">
+          <div className="mt-4 hidden gap-3 sm:grid-cols-3 lg:grid lg:max-w-2xl xl:mt-6">
             {metrics.map((metric) => (
               <div
                 key={metric.label}
@@ -109,13 +109,13 @@ export function HeroSection({ business, metrics, dictionary, locale }: HeroSecti
               locale={locale}
               className="overflow-hidden bg-transparent shadow-[0_28px_90px_rgba(6,8,15,0.55)]"
               frameClassName="border-white/5"
-              aspectClassName="aspect-[6/5] sm:aspect-[5/4] lg:aspect-[11/12] xl:aspect-[5/6]"
-              imageClassName="object-[center_34%] scale-[1.03] lg:scale-[1.08]"
-              overlayClassName="bg-[linear-gradient(180deg,rgba(6,8,15,0.06),rgba(6,8,15,0.18)_24%,rgba(6,8,15,0.38)_52%,rgba(6,8,15,0.78)_100%)]"
+              aspectClassName="aspect-[5/4] sm:aspect-[5/4] lg:aspect-[11/12] xl:aspect-[5/6]"
+              imageClassName="object-[center_34%] scale-[1.01] lg:scale-[1.08]"
+              overlayClassName="bg-[linear-gradient(180deg,rgba(6,8,15,0.04),rgba(6,8,15,0.12)_24%,rgba(6,8,15,0.3)_52%,rgba(6,8,15,0.72)_100%)]"
               showOverlayContent={false}
             />
 
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-36 bg-[linear-gradient(180deg,rgba(6,8,15,0)_0%,rgba(6,8,15,0.32)_42%,rgba(6,8,15,0.86)_100%)] lg:h-44" />
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-[linear-gradient(180deg,rgba(6,8,15,0)_0%,rgba(6,8,15,0.22)_42%,rgba(6,8,15,0.8)_100%)] lg:h-44" />
 
             <div className="relative mt-4 sm:mt-5 lg:absolute lg:bottom-6 lg:left-6 lg:right-6 lg:mt-0 xl:bottom-8 xl:left-8 xl:right-8">
               <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
@@ -128,7 +128,7 @@ export function HeroSection({ business, metrics, dictionary, locale }: HeroSecti
                   </p>
                 </div>
 
-                <div className="rounded-[1.5rem] border border-white/10 bg-[linear-gradient(180deg,rgba(10,12,20,0.72),rgba(10,12,20,0.9))] px-4 py-3 shadow-[0_16px_40px_rgba(5,8,16,0.34)] backdrop-blur-xl sm:px-5 sm:py-4">
+                <div className="hidden rounded-[1.5rem] border border-white/10 bg-[linear-gradient(180deg,rgba(10,12,20,0.72),rgba(10,12,20,0.9))] px-4 py-3 shadow-[0_16px_40px_rgba(5,8,16,0.34)] backdrop-blur-xl sm:block sm:px-5 sm:py-4">
                   <p className="text-[0.68rem] uppercase tracking-[0.24em] text-cyanGlow/80 sm:text-xs sm:tracking-[0.3em]">
                     {dictionary.hero.cityLabel}
                   </p>
@@ -137,15 +137,7 @@ export function HeroSection({ business, metrics, dictionary, locale }: HeroSecti
                 </div>
               </div>
 
-              <div className="mt-4 rounded-2xl border border-amberGlow/20 bg-amberGlow/10 p-4 lg:hidden">
-                <p className="text-[0.68rem] uppercase tracking-[0.24em] text-amberGlow sm:text-xs sm:tracking-[0.3em]">
-                  {business.signatureMoodLabel[locale]}
-                </p>
-                <p className="mt-3 text-sm leading-7 text-ivory/90">{business.signatureMoodText[locale]}</p>
-                <p className="mt-3 border-t border-white/10 pt-3 text-sm leading-7 text-mist">
-                  {business.identityLine[locale]}
-                </p>
-              </div>
+              <div className="lg:hidden" />
             </div>
           </div>
         </motion.div>

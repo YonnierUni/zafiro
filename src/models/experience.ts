@@ -47,7 +47,7 @@ export const experienceHighlights: ExperienceHighlight[] = [
 export const galleryMoments: GalleryMoment[] = [
   {
     title: { en: 'Visual signature', es: 'Firma visual' },
-    tag: { en: 'Cocktails', es: 'Cócteles' },
+    tag: { en: 'Identity', es: 'Identidad' },
     description: {
       en: 'Light, texture, and details that make ZAFIRO recognizable at first glance.',
       es: 'Luz, textura y detalles que hacen reconocible a ZAFIRO desde el primer vistazo.',

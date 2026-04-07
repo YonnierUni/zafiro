@@ -9,10 +9,18 @@ interface NavBarProps {
   dictionary: HomeDictionary;
   locale: Locale;
   onLocaleChange: (locale: Locale) => void;
+  onMobileMenuChange?: (isOpen: boolean) => void;
   reserveLabel: string;
 }
 
-export function NavBar({ business, dictionary, locale, onLocaleChange, reserveLabel }: NavBarProps) {
+export function NavBar({
+  business,
+  dictionary,
+  locale,
+  onLocaleChange,
+  onMobileMenuChange,
+  reserveLabel,
+}: NavBarProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const navItems = [
     { label: dictionary.nav.about, href: '#about' },
@@ -28,11 +36,13 @@ export function NavBar({ business, dictionary, locale, onLocaleChange, reserveLa
 
   useEffect(() => {
     document.body.style.overflow = isMobileMenuOpen ? 'hidden' : '';
+    onMobileMenuChange?.(isMobileMenuOpen);
 
     return () => {
       document.body.style.overflow = '';
+      onMobileMenuChange?.(false);
     };
-  }, [isMobileMenuOpen]);
+  }, [isMobileMenuOpen, onMobileMenuChange]);
 
   const closeMobileMenu = () => {
     setIsMobileMenuOpen(false);

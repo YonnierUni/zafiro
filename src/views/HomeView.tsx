@@ -15,6 +15,7 @@ const defaultLocale: Locale = 'es';
 
 export function HomeView() {
   const [locale, setLocale] = useState<Locale>(defaultLocale);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { business, featuredMenu, gallery, highlights, dictionary } = getHomePageData(locale);
 
   useEffect(() => {
@@ -28,6 +29,7 @@ export function HomeView() {
         dictionary={dictionary}
         locale={locale}
         onLocaleChange={setLocale}
+        onMobileMenuChange={setIsMobileMenuOpen}
         reserveLabel={business.reserveLabel[locale]}
       />
       <main className="relative overflow-hidden">
@@ -52,19 +54,25 @@ export function HomeView() {
         </div>
       </main>
       <Footer business={business} dictionary={dictionary} locale={locale} />
-      <div className="fixed inset-x-4 bottom-4 z-40 md:hidden">
-        <div className="flex items-center gap-3 rounded-[1.4rem] border border-white/10 bg-obsidian/85 p-3 shadow-glow backdrop-blur-xl">
+      <div
+        className={`fixed inset-x-4 bottom-[calc(1rem+env(safe-area-inset-bottom))] z-40 transform-gpu transition-[opacity,transform] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] md:hidden ${
+          isMobileMenuOpen
+            ? 'pointer-events-none translate-y-3 scale-[0.985] opacity-0'
+            : 'translate-y-0 scale-100 opacity-100'
+        }`}
+      >
+        <div className="flex items-center gap-2.5 rounded-[1.35rem] border border-sapphire/15 bg-[rgba(10,12,20,0.74)] p-2 shadow-[0_18px_44px_rgba(0,0,0,0.24)] backdrop-blur-lg">
           <a
             href={business.primaryCta.href}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex flex-1 items-center justify-center rounded-full bg-ivory px-4 py-3 text-xs font-bold uppercase tracking-[0.18em] text-obsidian"
+            className="inline-flex min-h-11 flex-1 items-center justify-center rounded-full bg-ivory px-4 py-2.5 text-xs font-bold uppercase tracking-[0.18em] text-obsidian"
           >
             {business.primaryCta.label[locale]}
           </a>
           <a
             href={business.secondaryCta.href}
-            className="inline-flex flex-1 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] px-4 py-3 text-xs font-semibold uppercase tracking-[0.18em] text-ivory"
+            className="inline-flex min-h-11 flex-1 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] px-4 py-2.5 text-xs font-semibold uppercase tracking-[0.18em] text-ivory"
           >
             {business.secondaryCta.label[locale]}
           </a>

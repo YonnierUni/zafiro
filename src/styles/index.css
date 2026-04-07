@@ -15,6 +15,22 @@ html {
   scroll-behavior: smooth;
 }
 
+@media (max-width: 767px) {
+  html {
+    scroll-padding-top: 3.95rem;
+  }
+
+  section[id],
+  [id="home"],
+  [id="about"],
+  [id="menu"],
+  [id="gallery"],
+  [id="experience"],
+  [id="contact"] {
+    scroll-margin-top: 0;
+  }
+}
+
 body {
   margin: 0;
   min-width: 320px;

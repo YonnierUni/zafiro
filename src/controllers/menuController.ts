@@ -1,4 +1,4 @@
-import type { MenuDataCollection } from '../models/menuData';
+import type { MenuDataCollection } from '../shared/menu/menu.types';
 
 export async function loadMenuData() {
   const response = await fetch(`${import.meta.env.BASE_URL}data/menu.json`);

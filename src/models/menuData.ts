@@ -1,31 +1,11 @@
 import type { Locale } from './business';
+import type {
+  MenuCategory,
+  MenuDataCollection,
+  MenuDataItem,
+} from '../shared/menu/menu.types';
 
-export type MenuCategory = 'cocteles' | 'bebidas' | 'comida' | 'otros';
-
-export interface MenuDataItem {
-  id: number;
-  orden: number;
-  slug: string;
-  name: string;
-  description: string;
-  tipo: string;
-  subgrupo?: string;
-  ingredientes: string;
-  preparacion: string;
-  emplatado: string;
-  precioVenta: number | null;
-  imagen: string;
-  hojaOrigen: string;
-  visible: boolean;
-  disponible: boolean;
-  destacado: boolean;
-}
-
-export interface MenuDataCollection {
-  updatedAt: string;
-  count: number;
-  items: MenuDataItem[];
-}
+export type { MenuCategory, MenuDataCollection, MenuDataItem } from '../shared/menu/menu.types';
 
 export function normalizeMenuCategory(tipo: string): MenuCategory {
   switch (tipo.trim().toLowerCase()) {

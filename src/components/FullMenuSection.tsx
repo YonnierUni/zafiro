@@ -150,17 +150,20 @@ export function FullMenuSection({ items, dictionary, locale }: FullMenuSectionPr
                           whileInView={{ opacity: 1, y: 0 }}
                           viewport={{ once: true, amount: 0.12 }}
                           transition={{ duration: 0.45, delay: index * 0.02 }}
-                          className="interactive-card overflow-hidden rounded-[1.6rem] border border-white/10 bg-obsidian/55"
+                          className="interactive-card group relative overflow-hidden rounded-[1.6rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(7,10,18,0.94))] shadow-[0_14px_34px_rgba(0,0,0,0.22)]"
                         >
+                          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(36,107,255,0.12),_transparent_34%)] opacity-80" />
                           {item.imagen ? (
-                            <div className="relative aspect-[4/3] overflow-hidden border-b border-white/10 bg-[radial-gradient(circle_at_top,_rgba(36,107,255,0.14),_transparent_42%),linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.02))]">
+                            <div className="relative aspect-[1/1.02] overflow-hidden bg-[radial-gradient(circle_at_top,_rgba(36,107,255,0.12),_transparent_40%),linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.02))] px-2 pt-2 sm:px-3 sm:pt-3">
                               <img
                                 src={resolveMenuImageSrc(item.imagen)}
                                 alt={`${sanitizeMenuText(item.name)} menu item`}
                                 loading="lazy"
-                                className="h-full w-full object-contain object-center p-4 transition duration-500 hover:scale-[1.02] sm:p-5"
+                                className="h-full w-full object-contain object-center drop-shadow-[0_22px_28px_rgba(0,0,0,0.28)] transition duration-500 group-hover:scale-[1.015]"
                               />
-                              <div className="absolute inset-0 bg-gradient-to-t from-midnight/75 via-midnight/12 to-transparent" />
+                              <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_transparent_50%,rgba(4,6,12,0.16)_100%)]" />
+                              <div className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-b from-transparent via-midnight/18 to-obsidian/95" />
+                              <div className="absolute inset-0 shadow-[inset_0_-52px_74px_rgba(4,6,12,0.52),inset_0_0_42px_rgba(0,0,0,0.1)]" />
                             </div>
                           ) : (
                             <div className="border-b border-white/10 bg-[radial-gradient(circle_at_top_left,_rgba(36,107,255,0.16),_transparent_40%),rgba(255,255,255,0.03)] px-4 py-4">
@@ -170,7 +173,7 @@ export function FullMenuSection({ items, dictionary, locale }: FullMenuSectionPr
                             </div>
                           )}
 
-                          <div className="p-4 sm:p-5">
+                          <div className="relative -mt-7 rounded-t-[1.5rem] bg-gradient-to-b from-obsidian/86 via-obsidian/96 to-obsidian p-4 before:absolute before:inset-x-0 before:top-0 before:h-px before:bg-gradient-to-r before:from-transparent before:via-white/8 before:to-transparent sm:-mt-8 sm:p-5">
                             <div className="flex items-start justify-between gap-3">
                               <h4 className="font-display text-[1.7rem] leading-tight text-ivory sm:text-[1.9rem]">
                                 {sanitizeMenuText(item.name)}

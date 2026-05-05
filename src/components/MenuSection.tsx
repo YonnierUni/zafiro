@@ -44,9 +44,16 @@ export function MenuSection({ items, dictionary, locale }: MenuSectionProps) {
                   <p className="max-w-[70%] text-[0.68rem] uppercase tracking-[0.28em] text-cyanGlow/80 sm:text-xs">
                     {item.category[locale]}
                   </p>
-                  <span className="rounded-full border border-white/10 bg-black/45 px-3 py-2 text-xs font-semibold text-amberGlow backdrop-blur-md sm:text-sm">
-                    {item.price[locale]}
-                  </span>
+                  <div className="flex flex-col items-end gap-2">
+                    {item.unavailableLabel ? (
+                      <span className="rounded-full border border-rose-200/20 bg-rose-200/10 px-3 py-1.5 text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-rose-100 backdrop-blur-md">
+                        {item.unavailableLabel[locale]}
+                      </span>
+                    ) : null}
+                    <span className="rounded-full border border-white/10 bg-black/45 px-3 py-2 text-xs font-semibold text-amberGlow backdrop-blur-md sm:text-sm">
+                      {item.price[locale]}
+                    </span>
+                  </div>
                 </div>
               </div>
 

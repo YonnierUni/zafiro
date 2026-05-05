@@ -61,6 +61,23 @@ function toPrice(value) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function toBoolean(value, defaultValue = true) {
+  const normalized = normalizeText(value).toLowerCase();
+
+  if (!normalized) return defaultValue;
+  if (["si", "sí", "true", "1", "yes", "y"].includes(normalized)) return true;
+  if (["no", "false", "0", "n"].includes(normalized)) return false;
+
+  return defaultValue;
+}
+
+function toInteger(value, fallback = null) {
+  if (value === null || value === undefined || value === "") return fallback;
+
+  const parsed = Number(String(value).trim());
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
 function normalizeSheetType(sheetName = "") {
   const normalized = sheetName
     .trim()
@@ -102,26 +119,30 @@ function mapRow(rawRow, index, sheetName) {
 
   const explicitType = normalizeText(row["tipo"]);
   const tipo = explicitType || normalizeSheetType(sheetName);
-
-  const explicitSubgrupo = normalizeText(row["subgrupo"]);
+  const subgrupo = normalizeText(row["subgrupo"]);
 
   const rawId = normalizeText(row["no"]);
-  const numericId = Number(rawId);
+  const numericId = toInteger(rawId, index + 1);
+
+  const orden = toInteger(row["orden"], numericId);
 
   return {
-    id: Number.isFinite(numericId) && numericId > 0 ? numericId : index + 1,
+    id: numericId,
+    orden,
     slug: toSlug(name),
     name,
     description: normalizeText(row["description"]),
     tipo,
-    subgrupo: explicitSubgrupo,
+    subgrupo,
     ingredientes: normalizeText(row["ingredientes"]),
     preparacion: normalizeText(row["preparacion"]),
     emplatado: normalizeText(row["emplatado"]),
     precioVenta: toPrice(row["precioventa"]),
     imagen: normalizeImagePath(row["imagen"]),
     hojaOrigen: sheetName,
-    visible: true,
+    visible: toBoolean(row["visible"], true),
+    disponible: toBoolean(row["disponible"], true),
+    destacado: toBoolean(row["destacado"], false),
   };
 }
 
@@ -151,6 +172,12 @@ function workbookToMenuJson(workbook) {
   if (!items.length) {
     throw new Error("No se encontraron filas válidas en ninguna hoja del Excel.");
   }
+
+  items.sort((a, b) => {
+    if (a.tipo !== b.tipo) return a.tipo.localeCompare(b.tipo, "es");
+    if (a.subgrupo !== b.subgrupo) return a.subgrupo.localeCompare(b.subgrupo, "es");
+    return a.orden - b.orden;
+  });
 
   return {
     updatedAt: new Date().toISOString(),

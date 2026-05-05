@@ -4,6 +4,7 @@ export type MenuCategory = 'cocteles' | 'bebidas' | 'comida' | 'otros';
 
 export interface MenuDataItem {
   id: number;
+  orden: number;
   slug: string;
   name: string;
   description: string;
@@ -16,6 +17,8 @@ export interface MenuDataItem {
   imagen: string;
   hojaOrigen: string;
   visible: boolean;
+  disponible: boolean;
+  destacado: boolean;
 }
 
 export interface MenuDataCollection {
@@ -60,6 +63,10 @@ export function formatMenuPrice(price: number | null) {
   }).format(price);
 }
 
+export function getMenuAvailabilityLabel(locale: Locale) {
+  return locale === 'es' ? 'Agotado' : 'Sold out';
+}
+
 export function sanitizeMenuText(value: string) {
   const text = value.trim();
 
@@ -94,7 +101,11 @@ export function getLocalizedCategoryLabel(category: MenuCategory, locale: Locale
 }
 
 export function getVisibleMenuItems(items: MenuDataItem[]) {
-  return items.filter((item) => item.visible);
+  return sortMenuItemsByOrder(items.filter((item) => item.visible === true));
+}
+
+export function isMenuItemAvailable(item: MenuDataItem) {
+  return item.disponible !== false;
 }
 
 export function groupMenuItemsByCategory(items: MenuDataItem[]) {
@@ -142,15 +153,43 @@ export function groupMenuItemsByTypeAndSubgroup(items: MenuDataItem[]) {
 function groupItemsBySubgroup(items: MenuDataItem[]) {
   const grouped = new Map<string, MenuDataItem[]>();
 
-  for (const item of items) {
+  for (const item of sortMenuItemsByOrder(items)) {
     const subgroup = getMenuSubgroupLabel(item);
     const existing = grouped.get(subgroup) ?? [];
     existing.push(item);
     grouped.set(subgroup, existing);
   }
 
-  return Array.from(grouped.entries()).map(([subgroup, subgroupItems]) => ({
-    subgroup,
-    items: subgroupItems,
-  }));
+  return Array.from(grouped.entries())
+    .map(([subgroup, subgroupItems]) => ({
+      subgroup,
+      items: sortMenuItemsByOrder(subgroupItems),
+    }))
+    .sort((left, right) => {
+      const leftOrder = getMenuItemOrder(left.items[0]);
+      const rightOrder = getMenuItemOrder(right.items[0]);
+
+      if (leftOrder !== rightOrder) {
+        return leftOrder - rightOrder;
+      }
+
+      return left.subgroup.localeCompare(right.subgroup, 'es-CO');
+    });
+}
+
+export function sortMenuItemsByOrder(items: MenuDataItem[]) {
+  return [...items].sort((left, right) => {
+    const leftOrder = getMenuItemOrder(left);
+    const rightOrder = getMenuItemOrder(right);
+
+    if (leftOrder !== rightOrder) {
+      return leftOrder - rightOrder;
+    }
+
+    return sanitizeMenuText(left.name).localeCompare(sanitizeMenuText(right.name), 'es-CO');
+  });
+}
+
+function getMenuItemOrder(item: MenuDataItem) {
+  return Number.isFinite(item.orden) ? item.orden : Number.MAX_SAFE_INTEGER;
 }

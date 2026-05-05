@@ -2,10 +2,13 @@ import type { LocalizedText } from './business';
 import {
   formatMenuPrice,
   getLocalizedCategoryLabel,
+  getMenuAvailabilityLabel,
   getMenuItemDisplayDescription,
+  isMenuItemAvailable,
   normalizeMenuCategory,
   resolveMenuImageSrc,
   sanitizeMenuText,
+  sortMenuItemsByOrder,
   type MenuDataItem,
 } from './menuData';
 
@@ -18,6 +21,7 @@ export interface MenuItem {
   accent: string;
   imageSrc: string;
   imageAlt: LocalizedText;
+  unavailableLabel?: LocalizedText;
   variants?: LocalizedText;
 }
 
@@ -31,22 +35,22 @@ interface FeaturedMenuEditorialItem {
 const featuredMenuEditorialBySlug: Record<string, FeaturedMenuEditorialItem> = {
   'mains-zafiro': {
     accent: 'from-sapphire/30 to-cyanGlow/5',
-    category: { en: 'House Signature', es: 'Cóctel de la casa' },
+    category: { en: 'House Signature', es: 'CÃ³ctel de la casa' },
     description: {
       en: 'The house cocktail that anchors the menu: sapphire color, fresh citrus lift, and a polished finish.',
-      es: 'El cóctel insignia de la casa: color zafiro, frescura cítrica y un final elegante.',
+      es: 'El cÃ³ctel insignia de la casa: color zafiro, frescura cÃ­trica y un final elegante.',
     },
   },
   margaritas: {
     accent: 'from-amberGlow/30 to-transparent',
-    category: { en: 'Shared Image Group', es: 'Selección de margaritas' },
+    category: { en: 'Shared Image Group', es: 'SelecciÃ³n de margaritas' },
     description: {
       en: 'One signature image represents the full margarita lineup, with a brighter, more playful profile for group plans and warm nights.',
-      es: 'Una sola imagen representa toda la línea de margaritas, con un perfil más fresco y llamativo para planes en grupo y noches cálidas.',
+      es: 'Una sola imagen representa toda la lÃ­nea de margaritas, con un perfil mÃ¡s fresco y llamativo para planes en grupo y noches cÃ¡lidas.',
     },
     variants: {
       en: 'Variants: Traditional, Apple, Sandia Red, Blue',
-      es: 'Variantes: Tradicional, Manzana, Sandía Red, Blue',
+      es: 'Variantes: Tradicional, Manzana, SandÃ­a Red, Blue',
     },
   },
   'passion-fresh': {
@@ -54,23 +58,23 @@ const featuredMenuEditorialBySlug: Record<string, FeaturedMenuEditorialItem> = {
     category: { en: 'Tropical Fresh', es: 'Fresco tropical' },
     description: {
       en: 'Passion fruit, a soft sparkle, and an easy tropical profile made for warm nights in Florencia.',
-      es: 'Maracuyá, un toque chispeante y un perfil tropical ligero hecho para las noches cálidas de Florencia.',
+      es: 'MaracuyÃ¡, un toque chispeante y un perfil tropical ligero hecho para las noches cÃ¡lidas de Florencia.',
     },
   },
   'coctel-tequila-sunrise': {
     accent: 'from-orange-300/25 to-transparent',
-    category: { en: 'Sunset Classic', es: 'Clásico al atardecer' },
+    category: { en: 'Sunset Classic', es: 'ClÃ¡sico al atardecer' },
     description: {
       en: 'Citrus, warmth, and a bold color profile that fits the first round of the night beautifully.',
-      es: 'Cítricos, calidez y un perfil de color intenso que acompaña perfecto la primera ronda de la noche.',
+      es: 'CÃ­tricos, calidez y un perfil de color intenso que acompaÃ±a perfecto la primera ronda de la noche.',
     },
   },
   'hawaiian-blue': {
     accent: 'from-cyanGlow/25 to-transparent',
-    category: { en: 'Classic with a Twist', es: 'Clásico con giro' },
+    category: { en: 'Classic with a Twist', es: 'ClÃ¡sico con giro' },
     description: {
       en: 'Island-inspired notes with a deep blue presentation and a crisp, refreshing close.',
-      es: 'Notas inspiradas en la isla, una presentación azul profunda y un cierre fresco y limpio.',
+      es: 'Notas inspiradas en la isla, una presentaciÃ³n azul profunda y un cierre fresco y limpio.',
     },
   },
   'cherry-champagne': {
@@ -78,7 +82,7 @@ const featuredMenuEditorialBySlug: Record<string, FeaturedMenuEditorialItem> = {
     category: { en: 'Celebration Pour', es: 'Para celebrar' },
     description: {
       en: 'Elegant bubbles and cherry notes designed for birthdays, toasts, and nights that deserve a little more.',
-      es: 'Burbujas elegantes y notas de cereza pensadas para cumpleaños, brindis y noches que merecen algo más.',
+      es: 'Burbujas elegantes y notas de cereza pensadas para cumpleaÃ±os, brindis y noches que merecen algo mÃ¡s.',
     },
   },
   'micheldas-frutos-rojos-verdes-amarillos': {
@@ -86,11 +90,11 @@ const featuredMenuEditorialBySlug: Record<string, FeaturedMenuEditorialItem> = {
     category: { en: 'Shared Image Group', es: 'Micheladas de la casa' },
     description: {
       en: 'One main image represents the michelada lineup, keeping the group feel visual while the variants stay clear in text.',
-      es: 'Una imagen principal representa la línea de micheladas, manteniendo lo visual del grupo mientras las variantes quedan claras en texto.',
+      es: 'Una imagen principal representa la lÃ­nea de micheladas, manteniendo lo visual del grupo mientras las variantes quedan claras en texto.',
     },
     variants: {
       en: 'Variants: Red Fruits, Green, Yellow, Traditional, Bretana, National Beer, Imported Beer',
-      es: 'Variantes: Frutos Rojos, Verdes, Amarillos, Tradicional, Bretaña, Cerveza Nacional, Cerveza Importada',
+      es: 'Variantes: Frutos Rojos, Verdes, Amarillos, Tradicional, BretaÃ±a, Cerveza Nacional, Cerveza Importada',
     },
   },
   'mojito-fresd': {
@@ -98,7 +102,7 @@ const featuredMenuEditorialBySlug: Record<string, FeaturedMenuEditorialItem> = {
     category: { en: 'All-Night Favorite', es: 'Favorito de la noche' },
     description: {
       en: 'Mint, citrus, and a refreshing balance that fits long conversations and easy-going plans.',
-      es: 'Menta, cítricos y un balance refrescante que acompaña conversaciones largas y planes sin afán.',
+      es: 'Menta, cÃ­tricos y un balance refrescante que acompaÃ±a conversaciones largas y planes sin afÃ¡n.',
     },
   },
   'blue-lagoon-drop': {
@@ -106,7 +110,7 @@ const featuredMenuEditorialBySlug: Record<string, FeaturedMenuEditorialItem> = {
     category: { en: 'Visual Standout', es: 'Impacto visual' },
     description: {
       en: 'Vivid sapphire color, bright energy, and a presentation designed to stand out before the first sip.',
-      es: 'Color zafiro vibrante, energía fresca y una presentación hecha para destacar antes del primer sorbo.',
+      es: 'Color zafiro vibrante, energÃ­a fresca y una presentaciÃ³n hecha para destacar antes del primer sorbo.',
     },
   },
 };
@@ -124,39 +128,54 @@ export const featuredMenuSlugs = [
 ] as const;
 
 export function buildFeaturedMenuItems(items: MenuDataItem[]): MenuItem[] {
-  const featuredItems: MenuItem[] = [];
+  const highlightedItems = sortMenuItemsByOrder(
+    items.filter((item) => item.destacado === true && Boolean(item.imagen.trim())),
+  );
+  const sourceItems = highlightedItems.length
+    ? highlightedItems
+    : featuredMenuSlugs
+        .map((slug) => items.find((menuItem) => menuItem.slug === slug))
+        .filter((item): item is MenuDataItem => Boolean(item));
 
-  for (const slug of featuredMenuSlugs) {
-    const item = items.find((menuItem) => menuItem.slug === slug);
+  return sourceItems.map((item) => {
+    const slug = item.slug;
     const editorial = featuredMenuEditorialBySlug[slug];
-
-    if (!item || !editorial) {
-      continue;
-    }
-
     const displayName =
       slug === 'micheldas-frutos-rojos-verdes-amarillos' ? 'Micheladas' : sanitizeMenuText(item.name);
+    const normalizedCategory = normalizeMenuCategory(item.tipo);
 
-    featuredItems.push({
+    return {
       slug,
       name: displayName,
       price: {
         en: formatMenuPrice(item.precioVenta),
         es: formatMenuPrice(item.precioVenta),
       },
-      category: editorial.category,
-      description: editorial.description,
-      accent: editorial.accent,
+      category:
+        editorial?.category ?? {
+          en: getLocalizedCategoryLabel(normalizedCategory, 'en'),
+          es: getLocalizedCategoryLabel(normalizedCategory, 'es'),
+        },
+      description:
+        editorial?.description ?? {
+          en: getMenuItemDisplayDescription(item) || displayName,
+          es: getMenuItemDisplayDescription(item) || displayName,
+        },
+      accent: editorial?.accent ?? 'from-sapphire/20 to-transparent',
       imageSrc: resolveMenuImageSrc(item.imagen),
       imageAlt: {
         en: `${displayName} menu item`,
-        es: `${displayName} del menú`,
+        es: `${displayName} del menÃº`,
       },
-      variants: editorial.variants,
-    });
-  }
-
-  return featuredItems;
+      unavailableLabel: isMenuItemAvailable(item)
+        ? undefined
+        : {
+            en: getMenuAvailabilityLabel('en'),
+            es: getMenuAvailabilityLabel('es'),
+          },
+      variants: editorial?.variants,
+    };
+  });
 }
 
 export function buildFallbackFeaturedMenuItem(item: MenuDataItem): MenuItem {
@@ -182,7 +201,13 @@ export function buildFallbackFeaturedMenuItem(item: MenuDataItem): MenuItem {
     imageSrc: resolveMenuImageSrc(item.imagen),
     imageAlt: {
       en: `${displayName} menu item`,
-      es: `${displayName} del menú`,
+      es: `${displayName} del menÃº`,
     },
+    unavailableLabel: isMenuItemAvailable(item)
+      ? undefined
+      : {
+          en: getMenuAvailabilityLabel('en'),
+          es: getMenuAvailabilityLabel('es'),
+        },
   };
 }

@@ -4,9 +4,11 @@ import type { HomeDictionary } from '../controllers/homeController';
 import type { Locale } from '../models/business';
 import {
   formatMenuPrice,
+  getMenuAvailabilityLabel,
   getLocalizedCategoryLabel,
   getMenuItemDisplayDescription,
   groupMenuItemsByTypeAndSubgroup,
+  isMenuItemAvailable,
   resolveMenuImageSrc,
   sanitizeMenuText,
   type MenuCategory,
@@ -151,14 +153,14 @@ export function FullMenuSection({ items, dictionary, locale }: FullMenuSectionPr
                           className="interactive-card overflow-hidden rounded-[1.6rem] border border-white/10 bg-obsidian/55"
                         >
                           {item.imagen ? (
-                            <div className="relative aspect-[4/3] overflow-hidden border-b border-white/10 bg-black/20">
+                            <div className="relative aspect-[4/3] overflow-hidden border-b border-white/10 bg-[radial-gradient(circle_at_top,_rgba(36,107,255,0.14),_transparent_42%),linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.02))]">
                               <img
                                 src={resolveMenuImageSrc(item.imagen)}
                                 alt={`${sanitizeMenuText(item.name)} menu item`}
                                 loading="lazy"
-                                className="h-full w-full object-cover transition duration-700 hover:scale-[1.04]"
+                                className="h-full w-full object-contain object-center p-4 transition duration-500 hover:scale-[1.02] sm:p-5"
                               />
-                              <div className="absolute inset-0 bg-gradient-to-t from-midnight via-midnight/15 to-transparent" />
+                              <div className="absolute inset-0 bg-gradient-to-t from-midnight/75 via-midnight/12 to-transparent" />
                             </div>
                           ) : (
                             <div className="border-b border-white/10 bg-[radial-gradient(circle_at_top_left,_rgba(36,107,255,0.16),_transparent_40%),rgba(255,255,255,0.03)] px-4 py-4">
@@ -173,9 +175,16 @@ export function FullMenuSection({ items, dictionary, locale }: FullMenuSectionPr
                               <h4 className="font-display text-[1.7rem] leading-tight text-ivory sm:text-[1.9rem]">
                                 {sanitizeMenuText(item.name)}
                               </h4>
-                              <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-amberGlow">
-                                {formatMenuPrice(item.precioVenta)}
-                              </span>
+                              <div className="flex flex-col items-end gap-2">
+                                {!isMenuItemAvailable(item) ? (
+                                  <span className="rounded-full border border-rose-200/20 bg-rose-200/10 px-3 py-1.5 text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-rose-100">
+                                    {getMenuAvailabilityLabel(locale)}
+                                  </span>
+                                ) : null}
+                                <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-amberGlow">
+                                  {formatMenuPrice(item.precioVenta)}
+                                </span>
+                              </div>
                             </div>
 
                             {getMenuItemDisplayDescription(item) ? (

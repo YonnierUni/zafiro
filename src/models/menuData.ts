@@ -52,7 +52,7 @@ export function resolveMenuImageSrc(imagePath: string): string {
 
 export function formatMenuPrice(price: number | null) {
   if (price === null) {
-    return 'Consultar';
+    return 'Consultar valor';
   }
 
   return new Intl.NumberFormat('es-CO', {
@@ -68,21 +68,31 @@ export function getMenuAvailabilityLabel(locale: Locale) {
 }
 
 export function sanitizeMenuText(value: string) {
-  const text = value.trim();
+  let text = value.trim();
 
   if (!text) {
     return '';
   }
 
-  if (!/[ÂÃâ]/.test(text)) {
-    return text;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    if (!/[ÃÂâ]/.test(text)) {
+      break;
+    }
+
+    try {
+      const decoded = decodeURIComponent(escape(text));
+
+      if (!decoded || decoded === text) {
+        break;
+      }
+
+      text = decoded;
+    } catch {
+      break;
+    }
   }
 
-  try {
-    return decodeURIComponent(escape(text));
-  } catch {
-    return text;
-  }
+  return text;
 }
 
 export function getMenuItemDisplayDescription(item: MenuDataItem) {

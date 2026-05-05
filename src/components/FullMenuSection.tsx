@@ -152,6 +152,17 @@ export function FullMenuSection({ items, dictionary, locale }: FullMenuSectionPr
                           transition={{ duration: 0.45, delay: index * 0.02 }}
                           className="interactive-card group relative overflow-hidden rounded-[1.6rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(7,10,18,0.94))] shadow-[0_14px_34px_rgba(0,0,0,0.22)]"
                         >
+                          {item.imagen ? (
+                            <div className="pointer-events-none absolute inset-0 overflow-hidden">
+                              <img
+                                src={resolveMenuImageSrc(item.imagen)}
+                                alt=""
+                                aria-hidden="true"
+                                className="absolute inset-0 h-full w-full scale-110 object-cover opacity-[0.12] blur-2xl saturate-[0.9]"
+                              />
+                              <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(36,107,255,0.12),_transparent_30%),linear-gradient(180deg,rgba(8,10,18,0.18),rgba(7,10,18,0.78)_58%,rgba(7,10,18,0.96)_100%)]" />
+                            </div>
+                          ) : null}
                           <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(36,107,255,0.12),_transparent_34%)] opacity-80" />
                           {item.imagen ? (
                             <div className="relative aspect-[1/1.02] overflow-hidden bg-[radial-gradient(circle_at_top,_rgba(36,107,255,0.12),_transparent_40%),linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.02))] px-2 pt-2 sm:px-3 sm:pt-3">
@@ -173,7 +184,8 @@ export function FullMenuSection({ items, dictionary, locale }: FullMenuSectionPr
                             </div>
                           )}
 
-                          <div className="relative -mt-7 rounded-t-[1.5rem] bg-gradient-to-b from-obsidian/86 via-obsidian/96 to-obsidian p-4 before:absolute before:inset-x-0 before:top-0 before:h-px before:bg-gradient-to-r before:from-transparent before:via-white/8 before:to-transparent sm:-mt-8 sm:p-5">
+                          <div className="relative -mt-7 rounded-t-[1.5rem] bg-gradient-to-b from-obsidian/84 via-obsidian/95 to-obsidian p-4 before:absolute before:inset-x-0 before:top-0 before:h-px before:bg-gradient-to-r before:from-transparent before:via-white/8 before:to-transparent sm:-mt-8 sm:p-5">
+                            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.02),_transparent_48%)]" />
                             <div className="flex items-start justify-between gap-3">
                               <h4 className="font-display text-[1.7rem] leading-tight text-ivory sm:text-[1.9rem]">
                                 {sanitizeMenuText(item.name)}

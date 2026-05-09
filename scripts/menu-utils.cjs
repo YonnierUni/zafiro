@@ -40,22 +40,31 @@ function toPrice(value) {
   const raw = String(value).trim();
   if (!raw) return null;
 
-  if (/^\d+$/.test(raw)) {
-    const parsed = Number(raw);
+  const sanitized = raw
+    .replace(/\u00a0/g, " ")
+    .replace(/\s+/g, "")
+    .replace(/[$€£¥]/g, "")
+    .replace(/^cop/i, "")
+    .replace(/^col\$/i, "");
+
+  if (!sanitized) return null;
+
+  if (/^\d+$/.test(sanitized)) {
+    const parsed = Number(sanitized);
     return Number.isFinite(parsed) ? parsed : null;
   }
 
-  if (/^\d{1,3}(\.\d{3})+$/.test(raw)) {
-    const parsed = Number(raw.replace(/\./g, ""));
+  if (/^\d{1,3}(\.\d{3})+$/.test(sanitized)) {
+    const parsed = Number(sanitized.replace(/\./g, ""));
     return Number.isFinite(parsed) ? parsed : null;
   }
 
-  if (/^\d{1,3}(,\d{3})+$/.test(raw)) {
-    const parsed = Number(raw.replace(/,/g, ""));
+  if (/^\d{1,3}(,\d{3})+$/.test(sanitized)) {
+    const parsed = Number(sanitized.replace(/,/g, ""));
     return Number.isFinite(parsed) ? parsed : null;
   }
 
-  const normalized = raw.replace(",", ".");
+  const normalized = sanitized.replace(",", ".");
   const parsed = Number(normalized);
 
   return Number.isFinite(parsed) ? parsed : null;

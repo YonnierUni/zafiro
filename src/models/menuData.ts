@@ -7,17 +7,19 @@ import type {
 
 export type { MenuCategory, MenuDataCollection, MenuDataItem } from '../shared/menu/menu.types';
 
+const preferredCategoryOrder = ['cocteles', 'bebidas', 'comida'] as const;
+
 export function normalizeMenuCategory(tipo: string): MenuCategory {
-  switch (tipo.trim().toLowerCase()) {
-    case 'cocteles':
-      return 'cocteles';
-    case 'bebidas':
-      return 'bebidas';
-    case 'comida':
-      return 'comida';
-    default:
-      return 'otros';
-  }
+  const normalized = sanitizeMenuText(tipo)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\w\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '');
+
+  return normalized || 'otros';
 }
 
 export function resolveMenuImageSrc(imagePath: string): string {
@@ -55,7 +57,7 @@ export function sanitizeMenuText(value: string) {
   }
 
   for (let attempt = 0; attempt < 2; attempt += 1) {
-    if (!/[ÃÂâ]/.test(text)) {
+    if (!/[ÃƒÃ‚Ã¢]/.test(text)) {
       break;
     }
 
@@ -80,14 +82,20 @@ export function getMenuItemDisplayDescription(item: MenuDataItem) {
 }
 
 export function getLocalizedCategoryLabel(category: MenuCategory, locale: Locale) {
-  const labels: Record<MenuCategory, Record<Locale, string>> = {
+  const normalizedCategory = normalizeMenuCategory(category);
+
+  const labels: Record<string, Record<Locale, string>> = {
     cocteles: { en: 'Cocktails', es: 'Cócteles' },
     bebidas: { en: 'Drinks', es: 'Bebidas' },
     comida: { en: 'Food', es: 'Comida' },
     otros: { en: 'More', es: 'Más' },
   };
 
-  return labels[category][locale];
+  if (labels[normalizedCategory]) {
+    return labels[normalizedCategory][locale];
+  }
+
+  return humanizeMenuCategoryLabel(normalizedCategory);
 }
 
 export function getVisibleMenuItems(items: MenuDataItem[]) {
@@ -99,18 +107,31 @@ export function isMenuItemAvailable(item: MenuDataItem) {
 }
 
 export function groupMenuItemsByCategory(items: MenuDataItem[]) {
-  const grouped: Record<MenuCategory, MenuDataItem[]> = {
-    cocteles: [],
-    bebidas: [],
-    comida: [],
-    otros: [],
-  };
+  const grouped: Record<MenuCategory, MenuDataItem[]> = {};
 
   for (const item of items) {
-    grouped[normalizeMenuCategory(item.tipo)].push(item);
+    const category = normalizeMenuCategory(item.tipo);
+
+    if (!grouped[category]) {
+      grouped[category] = [];
+    }
+
+    grouped[category].push(item);
   }
 
   return grouped;
+}
+
+export function getOrderedMenuCategories(items: MenuDataItem[]) {
+  const categories = Array.from(new Set(items.map((item) => normalizeMenuCategory(item.tipo))));
+  const primaryCategories = preferredCategoryOrder.filter((category) => categories.includes(category));
+  const additionalCategories = categories
+    .filter((category) => !preferredCategoryOrder.includes(category as (typeof preferredCategoryOrder)[number]))
+    .sort((left, right) =>
+      humanizeMenuCategoryLabel(left).localeCompare(humanizeMenuCategoryLabel(right), 'es-CO'),
+    );
+
+  return [...primaryCategories, ...additionalCategories];
 }
 
 export function getMenuSubgroupLabel(item: MenuDataItem) {
@@ -131,13 +152,13 @@ export function getMenuSubgroupLabel(item: MenuDataItem) {
 
 export function groupMenuItemsByTypeAndSubgroup(items: MenuDataItem[]) {
   const byType = groupMenuItemsByCategory(items);
+  const groupedByType: Record<MenuCategory, ReturnType<typeof groupItemsBySubgroup>> = {};
 
-  return {
-    cocteles: groupItemsBySubgroup(byType.cocteles),
-    bebidas: groupItemsBySubgroup(byType.bebidas),
-    comida: groupItemsBySubgroup(byType.comida),
-    otros: groupItemsBySubgroup(byType.otros),
-  };
+  for (const category of Object.keys(byType)) {
+    groupedByType[category] = groupItemsBySubgroup(byType[category]);
+  }
+
+  return groupedByType;
 }
 
 function groupItemsBySubgroup(items: MenuDataItem[]) {
@@ -182,4 +203,12 @@ export function sortMenuItemsByOrder(items: MenuDataItem[]) {
 
 function getMenuItemOrder(item: MenuDataItem) {
   return Number.isFinite(item.orden) ? item.orden : Number.MAX_SAFE_INTEGER;
+}
+
+function humanizeMenuCategoryLabel(category: string) {
+  return sanitizeMenuText(category)
+    .split(/[-_\s]+/)
+    .filter(Boolean)
+    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+    .join(' ');
 }

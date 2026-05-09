@@ -1,4 +1,4 @@
-export type MenuCategory = 'cocteles' | 'bebidas' | 'comida' | 'otros';
+export type MenuCategory = string;
 
 export interface MenuDataItem {
   id: number;

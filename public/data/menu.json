@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-05-09T00:51:59.464Z",
+  "updatedAt": "2026-05-09T01:01:37.208Z",
   "count": 76,
   "items": [
     {
@@ -1105,7 +1105,7 @@
       "orden": 13,
       "slug": "hamburguesa-de-la-casa",
       "name": "Hamburguesa de la Casa",
-      "description": "Pan artesanal, carne de 150gr, cebolla encurtida, tocineta dulce, queso cheddar, lechuaga, tomate y salsa de la casa.",
+      "description": "Pan artesanal, carne de 150gr, cebolla caramelizada, tocineta dulce, doble queso, lechuaga, tomate y salsa de la casa.",
       "tipo": "comida",
       "subgrupo": "Hamburguesas",
       "ingredientes": "",
@@ -1177,7 +1177,7 @@
       "orden": 4,
       "slug": "nachos-zafiro",
       "name": "Nachos Zafiro",
-      "description": "Totopos, carne desmechada, cheddar fundido, pico de gallo, guacamole y crema agria.",
+      "description": "Totopos, carne desmechada, doble queso fundido, pico de gallo, guacamole y crema agria.",
       "tipo": "comida",
       "subgrupo": "Para compartir",
       "ingredientes": "",
@@ -1204,8 +1204,8 @@
       "precioVenta": 26000,
       "imagen": "",
       "hojaOrigen": "Comida",
-      "visible": true,
-      "disponible": true,
+      "visible": false,
+      "disponible": false,
       "destacado": false
     },
     {
@@ -1231,7 +1231,7 @@
       "orden": 12,
       "slug": "desgranado-el-recucitador",
       "name": "Desgranado El Recucitador",
-      "description": "Base de lechuga, papas rusticas, con pollo y carne desmechada, chorizo, tocineta y maiz tierno.",
+      "description": "Base de lechuga, papas francesas, con pollo y carne desmechada, chorizo, tocineta y maiz tierno.",
       "tipo": "comida",
       "subgrupo": "Para compartir",
       "ingredientes": "",
@@ -1258,8 +1258,8 @@
       "precioVenta": 17000,
       "imagen": "",
       "hojaOrigen": "Comida",
-      "visible": true,
-      "disponible": true,
+      "visible": false,
+      "disponible": false,
       "destacado": false
     },
     {
@@ -1294,8 +1294,8 @@
       "precioVenta": 17000,
       "imagen": "",
       "hojaOrigen": "Comida",
-      "visible": true,
-      "disponible": true,
+      "visible": false,
+      "disponible": false,
       "destacado": false
     },
     {
@@ -1312,8 +1312,8 @@
       "precioVenta": 17000,
       "imagen": "",
       "hojaOrigen": "Comida",
-      "visible": true,
-      "disponible": true,
+      "visible": false,
+      "disponible": false,
       "destacado": false
     },
     {
@@ -1321,7 +1321,7 @@
       "orden": 6,
       "slug": "choripan-argentino",
       "name": "Choripan Argentino",
-      "description": "Pan baggete crujiente, chorizo en forma de mariposa, acompañado de salsa de cilantro con perejil y papas rusticas con paprikka.",
+      "description": "Pan baggete crujiente, chorizo en forma de mariposa, acompañado de salsa de cilantro con perejil y papas francesas.",
       "tipo": "comida",
       "subgrupo": "Sanduches y perros",
       "ingredientes": "",
@@ -1339,7 +1339,7 @@
       "orden": 7,
       "slug": "perrito-loco",
       "name": "Perrito Loco",
-      "description": "Salchicha americana, acompañado de guacamole, queso crema, queso cheddar, y tocineta en laminas.",
+      "description": "Salchicha americana, acompañado de guacamole, queso crema, doble queso, y tocineta en laminas.",
       "tipo": "comida",
       "subgrupo": "Sanduches y perros",
       "ingredientes": "",

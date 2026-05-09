@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-05-09T01:01:37.208Z",
+  "updatedAt": "2026-05-09T01:22:22.500Z",
   "count": 76,
   "items": [
     {
@@ -1013,8 +1013,8 @@
     {
       "id": 1,
       "orden": 1,
-      "slug": "tortilla-carne-zafiro",
-      "name": "Tortilla Carne Zafiro",
+      "slug": "tortilla-zafiro",
+      "name": "Tortilla Zafiro",
       "description": "Tortilla rellena de queso fundiddo, carne o pollo desmechada y aguacate con ahogao.",
       "tipo": "comida",
       "subgrupo": "Entradas",

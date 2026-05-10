@@ -40,22 +40,31 @@ function toPrice(value) {
   const raw = String(value).trim();
   if (!raw) return null;
 
-  if (/^\d+$/.test(raw)) {
-    const parsed = Number(raw);
+  const sanitized = raw
+    .replace(/\u00a0/g, " ")
+    .replace(/\s+/g, "")
+    .replace(/[$€£¥]/g, "")
+    .replace(/^cop/i, "")
+    .replace(/^col\$/i, "");
+
+  if (!sanitized) return null;
+
+  if (/^\d+$/.test(sanitized)) {
+    const parsed = Number(sanitized);
     return Number.isFinite(parsed) ? parsed : null;
   }
 
-  if (/^\d{1,3}(\.\d{3})+$/.test(raw)) {
-    const parsed = Number(raw.replace(/\./g, ""));
+  if (/^\d{1,3}(\.\d{3})+$/.test(sanitized)) {
+    const parsed = Number(sanitized.replace(/\./g, ""));
     return Number.isFinite(parsed) ? parsed : null;
   }
 
-  if (/^\d{1,3}(,\d{3})+$/.test(raw)) {
-    const parsed = Number(raw.replace(/,/g, ""));
+  if (/^\d{1,3}(,\d{3})+$/.test(sanitized)) {
+    const parsed = Number(sanitized.replace(/,/g, ""));
     return Number.isFinite(parsed) ? parsed : null;
   }
 
-  const normalized = raw.replace(",", ".");
+  const normalized = sanitized.replace(",", ".");
   const parsed = Number(normalized);
 
   return Number.isFinite(parsed) ? parsed : null;
@@ -100,10 +109,7 @@ function normalizeImagePath(value = "") {
   const image = normalizeText(value);
   if (!image) return "";
 
-  return image
-    .replace(/^\/+/, "")
-    .replace(/^public\/+/i, "")
-    .replace(/\\/g, "/");
+  return image.replace(/^\/+/, "").replace(/^public\/+/i, "").replace(/\\/g, "/");
 }
 
 function mapRow(rawRow, index, sheetName) {
@@ -172,12 +178,6 @@ function workbookToMenuJson(workbook) {
   if (!items.length) {
     throw new Error("No se encontraron filas válidas en ninguna hoja del Excel.");
   }
-
-  items.sort((a, b) => {
-    if (a.tipo !== b.tipo) return a.tipo.localeCompare(b.tipo, "es");
-    if (a.subgrupo !== b.subgrupo) return a.subgrupo.localeCompare(b.subgrupo, "es");
-    return a.orden - b.orden;
-  });
 
   return {
     updatedAt: new Date().toISOString(),

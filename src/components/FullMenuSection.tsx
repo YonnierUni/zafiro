@@ -7,8 +7,10 @@ import {
   getMenuAvailabilityLabel,
   getLocalizedCategoryLabel,
   getMenuItemDisplayDescription,
+  getOrderedMenuCategories,
   groupMenuItemsByTypeAndSubgroup,
   isMenuItemAvailable,
+  normalizeMenuCategory,
   resolveMenuImageSrc,
   sanitizeMenuText,
   type MenuCategory,
@@ -22,27 +24,37 @@ interface FullMenuSectionProps {
   locale: Locale;
 }
 
-const categoryOrder: MenuCategory[] = ['cocteles', 'bebidas', 'comida'];
 type MenuFilter = 'all' | MenuCategory;
 
 export function FullMenuSection({ items, dictionary, locale }: FullMenuSectionProps) {
-  const groupedItems = groupMenuItemsByTypeAndSubgroup(items);
+  const groupedItems = useMemo(() => groupMenuItemsByTypeAndSubgroup(items), [items]);
+  const categories = useMemo(() => getOrderedMenuCategories(items), [items]);
   const [selectedCategory, setSelectedCategory] = useState<MenuFilter>('all');
   const [selectedSubgroup, setSelectedSubgroup] = useState<string>('all');
+
+  useEffect(() => {
+    if (selectedCategory === 'all') {
+      return;
+    }
+
+    if (!categories.includes(selectedCategory)) {
+      setSelectedCategory('all');
+    }
+  }, [categories, selectedCategory]);
 
   const availableSubgroups = useMemo(() => {
     if (selectedCategory === 'all') {
       return [];
     }
 
-    return groupedItems[selectedCategory].map((group) => group.subgroup);
+    return (groupedItems[selectedCategory] ?? []).map((group) => group.subgroup);
   }, [groupedItems, selectedCategory]);
 
   useEffect(() => {
     setSelectedSubgroup('all');
   }, [selectedCategory]);
 
-  const visibleCategories = selectedCategory === 'all' ? categoryOrder : [selectedCategory];
+  const visibleCategories = selectedCategory === 'all' ? categories : [selectedCategory];
 
   return (
     <section id="full-menu" className="mx-auto max-w-7xl px-5 py-12 sm:px-6 sm:py-24 lg:px-8 xl:max-w-[90rem] 2xl:px-10">
@@ -64,7 +76,7 @@ export function FullMenuSection({ items, dictionary, locale }: FullMenuSectionPr
                 onClick={() => setSelectedCategory('all')}
                 label={dictionary.fullMenu.allFilter}
               />
-              {categoryOrder.map((category) => (
+              {categories.map((category) => (
                 <FilterPill
                   key={category}
                   active={selectedCategory === category}
@@ -102,7 +114,8 @@ export function FullMenuSection({ items, dictionary, locale }: FullMenuSectionPr
 
       <div className="mt-8 space-y-8 sm:mt-10 sm:space-y-10">
         {visibleCategories.map((category) => {
-          const categoryGroups = groupedItems[category];
+          const normalizedCategory = normalizeMenuCategory(category);
+          const categoryGroups = groupedItems[normalizedCategory] ?? [];
           const filteredGroups =
             selectedSubgroup === 'all'
               ? categoryGroups
@@ -114,7 +127,7 @@ export function FullMenuSection({ items, dictionary, locale }: FullMenuSectionPr
 
           return (
             <section
-              key={category}
+              key={normalizedCategory}
               className="rounded-[1.9rem] border border-white/10 bg-white/[0.03] p-4 sm:p-6 xl:p-7"
             >
               <div className="flex flex-col gap-3 border-b border-white/10 pb-4 sm:flex-row sm:items-end sm:justify-between sm:pb-5">
@@ -123,7 +136,7 @@ export function FullMenuSection({ items, dictionary, locale }: FullMenuSectionPr
                     {dictionary.fullMenu.categoryEyebrow}
                   </p>
                   <h3 className="mt-2 font-display text-[2rem] text-ivory sm:text-[2.4rem]">
-                    {getLocalizedCategoryLabel(category, locale)}
+                    {getLocalizedCategoryLabel(normalizedCategory, locale)}
                   </h3>
                 </div>
                 <span className="w-fit rounded-full border border-white/10 bg-obsidian/45 px-3 py-1.5 text-[0.68rem] uppercase tracking-[0.24em] text-amberGlow">
@@ -134,7 +147,7 @@ export function FullMenuSection({ items, dictionary, locale }: FullMenuSectionPr
 
               <div className="mt-5 space-y-5">
                 {filteredGroups.map((group) => (
-                  <div key={`${category}-${group.subgroup}`} className="space-y-4">
+                  <div key={`${normalizedCategory}-${group.subgroup}`} className="space-y-4">
                     <div className="flex items-center gap-3">
                       <span className="h-px flex-1 bg-gradient-to-r from-white/10 to-transparent" />
                       <p className="text-[0.68rem] uppercase tracking-[0.24em] text-mist">
@@ -145,7 +158,7 @@ export function FullMenuSection({ items, dictionary, locale }: FullMenuSectionPr
                     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                       {group.items.map((item, index) => (
                         <motion.article
-                          key={`${category}-${group.subgroup}-${item.slug}`}
+                          key={`${normalizedCategory}-${group.subgroup}-${item.slug}`}
                           initial={{ opacity: 0, y: 18 }}
                           whileInView={{ opacity: 1, y: 0 }}
                           viewport={{ once: true, amount: 0.12 }}
@@ -179,7 +192,7 @@ export function FullMenuSection({ items, dictionary, locale }: FullMenuSectionPr
                           ) : (
                             <div className="border-b border-white/10 bg-[radial-gradient(circle_at_top_left,_rgba(36,107,255,0.16),_transparent_40%),rgba(255,255,255,0.03)] px-4 py-4">
                               <p className="text-[0.68rem] uppercase tracking-[0.24em] text-cyanGlow/80">
-                                {getLocalizedCategoryLabel(category, locale)}
+                                {getLocalizedCategoryLabel(normalizedCategory, locale)}
                               </p>
                             </div>
                           )}

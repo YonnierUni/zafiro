@@ -109,10 +109,7 @@ function normalizeImagePath(value = "") {
   const image = normalizeText(value);
   if (!image) return "";
 
-  return image
-    .replace(/^\/+/, "")
-    .replace(/^public\/+/i, "")
-    .replace(/\\/g, "/");
+  return image.replace(/^\/+/, "").replace(/^public\/+/i, "").replace(/\\/g, "/");
 }
 
 function mapRow(rawRow, index, sheetName) {
@@ -181,12 +178,6 @@ function workbookToMenuJson(workbook) {
   if (!items.length) {
     throw new Error("No se encontraron filas válidas en ninguna hoja del Excel.");
   }
-
-  items.sort((a, b) => {
-    if (a.tipo !== b.tipo) return a.tipo.localeCompare(b.tipo, "es");
-    if (a.subgrupo !== b.subgrupo) return a.subgrupo.localeCompare(b.subgrupo, "es");
-    return a.orden - b.orden;
-  });
 
   return {
     updatedAt: new Date().toISOString(),

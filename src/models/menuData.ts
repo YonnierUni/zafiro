@@ -3,10 +3,13 @@ import type { MenuCategory, MenuDataCollection, MenuDataItem } from '../shared/m
 
 export type { MenuCategory, MenuDataCollection, MenuDataItem } from '../shared/menu/menu.types';
 
+const preferredCategoryOrder = ['cocteles', 'bebidas', 'comida'] as const;
+
 const defaultCategoryLabels: Record<string, Record<Locale, string>> = {
   bebidas: { en: 'Drinks', es: 'Bebidas' },
   cocteles: { en: 'Cocktails', es: 'Cócteles' },
   comida: { en: 'Food', es: 'Comida' },
+  otros: { en: 'More', es: 'Más' },
 };
 
 export function normalizeMenuCategory(tipo: string): MenuCategory {
@@ -100,27 +103,11 @@ export function isMenuItemAvailable(item: MenuDataItem) {
 }
 
 export function getOrderedMenuCategories(items: MenuDataItem[]) {
-  const categories: MenuCategory[] = [];
-
-  for (const item of items) {
-    const category = normalizeMenuCategory(item.tipo);
-
-    if (!categories.includes(category)) {
-      categories.push(category);
-    }
-  }
-
-  return categories;
-}
-
-export function getOrderedMenuCategories(items: MenuDataItem[]) {
   const categories = Array.from(new Set(items.map((item) => normalizeMenuCategory(item.tipo))));
   const primaryCategories = preferredCategoryOrder.filter((category) => categories.includes(category));
   const additionalCategories = categories
     .filter((category) => !preferredCategoryOrder.includes(category as (typeof preferredCategoryOrder)[number]))
-    .sort((left, right) =>
-      humanizeMenuCategoryLabel(left).localeCompare(humanizeMenuCategoryLabel(right), 'es-CO'),
-    );
+    .sort((left, right) => humanizeMenuLabel(left).localeCompare(humanizeMenuLabel(right), 'es-CO'));
 
   return [...primaryCategories, ...additionalCategories];
 }

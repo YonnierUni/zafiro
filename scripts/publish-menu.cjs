@@ -10,10 +10,11 @@ const filesToPublish = [
 const commitMessage = process.env.MENU_PUBLISH_MESSAGE || "Update menu data";
 
 function run(command, args, options = {}) {
-  const result = spawnSync(command, args, {
+  const executable = process.platform === "win32" && command === "npm" ? "npm.cmd" : command;
+  const result = spawnSync(executable, args, {
     cwd: process.cwd(),
     encoding: "utf8",
-    shell: process.platform === "win32",
+    shell: false,
     stdio: options.capture ? "pipe" : "inherit",
   });
 
@@ -23,7 +24,7 @@ function run(command, args, options = {}) {
 
   if (result.status !== 0 && !options.allowFailure) {
     const details = result.stderr || result.stdout || "";
-    throw new Error(`${command} ${args.join(" ")} failed.\n${details}`.trim());
+    throw new Error(`${executable} ${args.join(" ")} failed.\n${details}`.trim());
   }
 
   return result;

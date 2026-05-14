@@ -10,7 +10,8 @@
     "menu:build:local": "node scripts/excel-to-json-local.cjs",
     "menu:build:link": "node scripts/excel-to-json-link.cjs",
     "menu:build": "npm run menu:build:link || npm run menu:build:local",
-    "menu:publish": "node scripts/publish-menu.cjs"
+    "menu:publish": "node scripts/publish-menu.cjs",
+    "site:publish": "node scripts/publish-site.cjs"
   },
   "dependencies": {
     "framer-motion": "^12.10.0",

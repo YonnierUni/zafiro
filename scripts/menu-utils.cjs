@@ -2,9 +2,12 @@ const fs = require("fs");
 const path = require("path");
 const XLSX = require("xlsx");
 
+const PUBLIC_DIR = path.resolve(__dirname, "../public");
+const DOCS_DIR = path.resolve(__dirname, "../docs");
 const PUBLIC_OUTPUT_PATH = path.resolve(__dirname, "../public/data/menu.json");
 const DOCS_OUTPUT_PATH = path.resolve(__dirname, "../docs/data/menu.json");
 const DOCS_META_PATH = path.resolve(__dirname, "../docs/build-meta.json");
+const PUBLIC_ENTRIES_TO_SYNC = ["404.html", "data", "favicon", "images", "social"];
 
 function normalizeHeader(header = "") {
   return String(header)
@@ -206,12 +209,29 @@ function buildDocsMeta(data) {
   };
 }
 
+function syncPublicToDocs() {
+  for (const entry of PUBLIC_ENTRIES_TO_SYNC) {
+    const sourcePath = path.join(PUBLIC_DIR, entry);
+    const targetPath = path.join(DOCS_DIR, entry);
+
+    if (!fs.existsSync(sourcePath)) {
+      continue;
+    }
+
+    fs.cpSync(sourcePath, targetPath, {
+      recursive: true,
+      force: true,
+    });
+  }
+}
+
 function saveMenuJson(data) {
   writeJsonFile(PUBLIC_OUTPUT_PATH, data);
-  writeJsonFile(DOCS_OUTPUT_PATH, data);
+  syncPublicToDocs();
   writeJsonFile(DOCS_META_PATH, buildDocsMeta(data));
 
   console.log(`OK menu.json generado en: ${PUBLIC_OUTPUT_PATH}`);
+  console.log(`OK public sincronizado en: ${DOCS_DIR}`);
   console.log(`OK menu.json sincronizado en: ${DOCS_OUTPUT_PATH}`);
   console.log(`OK meta de Pages actualizado en: ${DOCS_META_PATH}`);
   console.log(`Items: ${data.count}`);

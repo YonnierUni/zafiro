@@ -2,8 +2,16 @@ const { spawnSync } = require("child_process");
 
 const filesToPublish = [
   "data/ZafiroMenu.xlsx",
-  "public/data/menu.json",
+  "public/404.html",
+  "public/data",
+  "public/favicon",
+  "public/images",
+  "public/social",
+  "docs/404.html",
   "docs/data/menu.json",
+  "docs/favicon",
+  "docs/images",
+  "docs/social",
   "docs/build-meta.json",
 ];
 

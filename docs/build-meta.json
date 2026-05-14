@@ -1,7 +1,7 @@
 {
-  "updatedAt": "2026-05-14T08:46:29.123Z",
+  "updatedAt": "2026-05-14T09:01:42.595Z",
   "source": "data/ZafiroMenu.xlsx",
-  "menuUpdatedAt": "2026-05-14T08:46:28.824Z",
+  "menuUpdatedAt": "2026-05-14T09:01:42.300Z",
   "menuItemCount": 107,
   "files": {
     "publicMenu": "public/data/menu.json",

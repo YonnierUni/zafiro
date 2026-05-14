@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-05-14T06:59:15.289Z",
+  "updatedAt": "2026-05-14T07:40:22.902Z",
   "count": 107,
   "items": [
     {
@@ -428,7 +428,7 @@
       "preparacion": "Corona o Smirnoff Ice, mezcla frutal, zumo de limón, hielo, escarchado y tajada de limón.",
       "emplatado": "",
       "precioVenta": 21000,
-      "imagen": "",
+      "imagen": "images/menu/alcohol/21-micheladas-surtidas.jpeg",
       "hojaOrigen": "Micheladas",
       "visible": true,
       "disponible": true,
@@ -446,7 +446,7 @@
       "preparacion": "Cerveza nacional, mezcla frutal, zumo de limón, hielo, escarchado y tajada de limón.",
       "emplatado": "",
       "precioVenta": 18000,
-      "imagen": "",
+      "imagen": "images/menu/non-alcohol/27-michelada-cerveza-importada-corona.jpeg",
       "hojaOrigen": "Micheladas",
       "visible": true,
       "disponible": true,
@@ -500,7 +500,7 @@
       "preparacion": "Soda o Bretaña, mezcla frutal, zumo de limón, hielo, escarchado y tajada de limón.",
       "emplatado": "",
       "precioVenta": 15000,
-      "imagen": "",
+      "imagen": "images/menu/alcohol/21-micheladas-surtidas.jpeg",
       "hojaOrigen": "Micheladas",
       "visible": true,
       "disponible": true,
@@ -934,8 +934,8 @@
       "precioVenta": 21000,
       "imagen": "images/menu/non-alcohol/21-micheladas-surtidas.jpeg",
       "hojaOrigen": "Cocteles",
-      "visible": true,
-      "disponible": true,
+      "visible": false,
+      "disponible": false,
       "destacado": false
     },
     {
@@ -1346,7 +1346,7 @@
       "preparacion": "",
       "emplatado": "",
       "precioVenta": 10000,
-      "imagen": "",
+      "imagen": "images/menu/jugos/limonada-de-sandia.jpeg",
       "hojaOrigen": "Jugos y Limonadas",
       "visible": true,
       "disponible": true,

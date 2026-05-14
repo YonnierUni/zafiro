@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-05-14T08:36:51.084Z",
+  "updatedAt": "2026-05-14T08:38:52.710Z",
   "count": 107,
   "items": [
     {
@@ -563,8 +563,8 @@
     {
       "id": 1,
       "orden": 1,
-      "slug": "margaritas-ssssssssssssssssss",
-      "name": "Margaritas ssssssssssssssssss",
+      "slug": "margaritas",
+      "name": "Margaritas",
       "description": "Tequila, cítricos y licor de naranja en una mezcla fresca y vibrante, con borde escarchado y carácter clásico.",
       "tipo": "cocteles",
       "subgrupo": "Con alcohol",

@@ -2,7 +2,9 @@ const fs = require("fs");
 const path = require("path");
 const XLSX = require("xlsx");
 
-const OUTPUT_PATH = path.resolve(__dirname, "../public/data/menu.json");
+const PUBLIC_OUTPUT_PATH = path.resolve(__dirname, "../public/data/menu.json");
+const DOCS_OUTPUT_PATH = path.resolve(__dirname, "../docs/data/menu.json");
+const DOCS_META_PATH = path.resolve(__dirname, "../docs/build-meta.json");
 
 function normalizeHeader(header = "") {
   return String(header)
@@ -186,11 +188,33 @@ function workbookToMenuJson(workbook) {
   };
 }
 
+function writeJsonFile(outputPath, data) {
+  fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+  fs.writeFileSync(outputPath, `${JSON.stringify(data, null, 2)}\n`, "utf8");
+}
+
+function buildDocsMeta(data) {
+  return {
+    updatedAt: new Date().toISOString(),
+    source: "data/ZafiroMenu.xlsx",
+    menuUpdatedAt: data.updatedAt,
+    menuItemCount: data.count,
+    files: {
+      publicMenu: "public/data/menu.json",
+      docsMenu: "docs/data/menu.json",
+    },
+  };
+}
+
 function saveMenuJson(data) {
-  fs.mkdirSync(path.dirname(OUTPUT_PATH), { recursive: true });
-  fs.writeFileSync(OUTPUT_PATH, JSON.stringify(data, null, 2), "utf8");
-  console.log(`✅ menu.json generado en: ${OUTPUT_PATH}`);
-  console.log(`📦 Items: ${data.count}`);
+  writeJsonFile(PUBLIC_OUTPUT_PATH, data);
+  writeJsonFile(DOCS_OUTPUT_PATH, data);
+  writeJsonFile(DOCS_META_PATH, buildDocsMeta(data));
+
+  console.log(`OK menu.json generado en: ${PUBLIC_OUTPUT_PATH}`);
+  console.log(`OK menu.json sincronizado en: ${DOCS_OUTPUT_PATH}`);
+  console.log(`OK meta de Pages actualizado en: ${DOCS_META_PATH}`);
+  console.log(`Items: ${data.count}`);
 }
 
 module.exports = {

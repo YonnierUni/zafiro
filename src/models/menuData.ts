@@ -3,12 +3,12 @@ import type { MenuCategory, MenuDataCollection, MenuDataItem } from '../shared/m
 
 export type { MenuCategory, MenuDataCollection, MenuDataItem } from '../shared/menu/menu.types';
 
-const preferredCategoryOrder = ['cocteles', 'bebidas', 'comida'] as const;
-
 const defaultCategoryLabels: Record<string, Record<Locale, string>> = {
   bebidas: { en: 'Drinks', es: 'Bebidas' },
   cocteles: { en: 'Cocktails', es: 'Cócteles' },
   comida: { en: 'Food', es: 'Comida' },
+  'jugos-y-limonadas': { en: 'Juices & Lemonades', es: 'Jugos y Limonadas' },
+  micheladas: { en: 'Micheladas', es: 'Micheladas' },
   otros: { en: 'More', es: 'Más' },
 };
 
@@ -103,13 +103,29 @@ export function isMenuItemAvailable(item: MenuDataItem) {
 }
 
 export function getOrderedMenuCategories(items: MenuDataItem[]) {
-  const categories = Array.from(new Set(items.map((item) => normalizeMenuCategory(item.tipo))));
-  const primaryCategories = preferredCategoryOrder.filter((category) => categories.includes(category));
-  const additionalCategories = categories
-    .filter((category) => !preferredCategoryOrder.includes(category as (typeof preferredCategoryOrder)[number]))
-    .sort((left, right) => humanizeMenuLabel(left).localeCompare(humanizeMenuLabel(right), 'es-CO'));
+  const categories: MenuCategory[] = [];
+  const seenCategories = new Set<MenuCategory>();
 
-  return [...primaryCategories, ...additionalCategories];
+  for (const item of items) {
+    const category = getMenuSectionCategory(item);
+
+    if (!seenCategories.has(category)) {
+      seenCategories.add(category);
+      categories.push(category);
+    }
+  }
+
+  return categories;
+}
+
+export function getMenuSectionCategory(item: MenuDataItem): MenuCategory {
+  const sheetName = sanitizeMenuText(item.hojaOrigen ?? '');
+
+  if (sheetName) {
+    return normalizeMenuCategory(sheetName);
+  }
+
+  return normalizeMenuCategory(item.tipo);
 }
 
 export function getMenuSubgroupLabel(item: MenuDataItem) {
@@ -119,26 +135,20 @@ export function getMenuSubgroupLabel(item: MenuDataItem) {
     return subgroup;
   }
 
-  const sheetName = sanitizeMenuText(item.hojaOrigen ?? '');
-
-  if (sheetName) {
-    return sheetName;
-  }
-
   return 'General';
 }
 
 export function groupMenuItemsByTypeAndSubgroup(items: MenuDataItem[]) {
-  const grouped = new Map<MenuCategory, Map<string, MenuDataItem[]>>();
+  const grouped = new Map<MenuCategory, Map<string, { firstIndex: number; items: MenuDataItem[] }>>();
 
-  for (const item of items) {
-    const category = normalizeMenuCategory(item.tipo);
+  for (const [index, item] of items.entries()) {
+    const category = getMenuSectionCategory(item);
     const subgroup = getMenuSubgroupLabel(item);
-    const categoryGroups = grouped.get(category) ?? new Map<string, MenuDataItem[]>();
-    const subgroupItems = categoryGroups.get(subgroup) ?? [];
+    const categoryGroups = grouped.get(category) ?? new Map<string, { firstIndex: number; items: MenuDataItem[] }>();
+    const subgroupGroup = categoryGroups.get(subgroup) ?? { firstIndex: index, items: [] };
 
-    subgroupItems.push(item);
-    categoryGroups.set(subgroup, subgroupItems);
+    subgroupGroup.items.push(item);
+    categoryGroups.set(subgroup, subgroupGroup);
     grouped.set(category, categoryGroups);
   }
 
@@ -146,9 +156,10 @@ export function groupMenuItemsByTypeAndSubgroup(items: MenuDataItem[]) {
 
   for (const [category, subgroupMap] of grouped.entries()) {
     result[category] = Array.from(subgroupMap.entries())
-      .map(([subgroup, subgroupItems]) => ({
+      .map(([subgroup, subgroupGroup]) => ({
         subgroup,
-        items: sortMenuItemsByOrder(subgroupItems),
+        firstIndex: subgroupGroup.firstIndex,
+        items: sortMenuItemsByOrder(subgroupGroup.items),
       }))
       .sort((left, right) => {
         const leftOrder = getMenuItemOrder(left.items[0]);
@@ -158,8 +169,9 @@ export function groupMenuItemsByTypeAndSubgroup(items: MenuDataItem[]) {
           return leftOrder - rightOrder;
         }
 
-        return left.subgroup.localeCompare(right.subgroup, 'es-CO');
-      });
+        return left.firstIndex - right.firstIndex;
+      })
+      .map(({ subgroup, items }) => ({ subgroup, items }));
   }
 
   return result;

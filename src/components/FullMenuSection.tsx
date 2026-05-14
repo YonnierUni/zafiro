@@ -161,7 +161,7 @@ export function FullMenuSection({ items, dictionary, locale }: FullMenuSectionPr
                         <FullMenuItemCard
                           key={`${normalizedCategory}-${group.subgroup}-${item.slug}`}
                           item={item}
-                          category={normalizedCategory}
+                          category={normalizeMenuCategory(item.tipo)}
                           index={index}
                           locale={locale}
                         />

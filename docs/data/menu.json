@@ -1,6 +1,6 @@
 {
-  "updatedAt": "2026-05-14T09:01:42.300Z",
-  "count": 107,
+  "updatedAt": "2026-05-18T07:57:10.174Z",
+  "count": 109,
   "items": [
     {
       "id": 1,
@@ -248,7 +248,7 @@
       "preparacion": "",
       "emplatado": "",
       "precioVenta": 24000,
-      "imagen": "images/menu/comida/14-hamburguesa-de-la-casa.jpeg",
+      "imagen": "images/menu/comida/14-hamburguesa-de-la-casa.png",
       "hojaOrigen": "Comida",
       "visible": true,
       "disponible": true,
@@ -1371,6 +1371,42 @@
       "destacado": false
     },
     {
+      "id": 21,
+      "orden": 21,
+      "slug": "soda-italiana-de-maracuya",
+      "name": "Soda Italiana de Maracuyá",
+      "description": "",
+      "tipo": "jugos-y-limonadas",
+      "subgrupo": "Sodas italianas",
+      "ingredientes": "",
+      "preparacion": "",
+      "emplatado": "",
+      "precioVenta": 13000,
+      "imagen": "images/menu/jugos/soda-italiana-maracuya.png",
+      "hojaOrigen": "Jugos y Limonadas",
+      "visible": true,
+      "disponible": true,
+      "destacado": false
+    },
+    {
+      "id": 22,
+      "orden": 22,
+      "slug": "soda-italiana-de-frutos-rojos",
+      "name": "Soda Italiana de Frutos Rojos",
+      "description": "",
+      "tipo": "jugos-y-limonadas",
+      "subgrupo": "Sodas italianas",
+      "ingredientes": "",
+      "preparacion": "",
+      "emplatado": "",
+      "precioVenta": 13000,
+      "imagen": "images/menu/jugos/soda-italiana-frutos-rojos.png",
+      "hojaOrigen": "Jugos y Limonadas",
+      "visible": true,
+      "disponible": true,
+      "destacado": false
+    },
+    {
       "id": 1,
       "orden": 1,
       "slug": "poker",
@@ -1438,8 +1474,8 @@
       "precioVenta": 6000,
       "imagen": "images/menu/bebidas/coronita.jpg",
       "hojaOrigen": "Bebidas",
-      "visible": true,
-      "disponible": true,
+      "visible": false,
+      "disponible": false,
       "destacado": false
     },
     {
@@ -1528,8 +1564,8 @@
       "precioVenta": 18000,
       "imagen": "images/menu/bebidas/stella-artois.jpg",
       "hojaOrigen": "Bebidas",
-      "visible": true,
-      "disponible": true,
+      "visible": false,
+      "disponible": false,
       "destacado": false
     },
     {

@@ -2,12 +2,7 @@ const fs = require("fs");
 const path = require("path");
 const XLSX = require("xlsx");
 
-const PUBLIC_DIR = path.resolve(__dirname, "../public");
-const DOCS_DIR = path.resolve(__dirname, "../docs");
-const PUBLIC_OUTPUT_PATH = path.resolve(__dirname, "../public/data/menu.json");
-const DOCS_OUTPUT_PATH = path.resolve(__dirname, "../docs/data/menu.json");
-const DOCS_META_PATH = path.resolve(__dirname, "../docs/build-meta.json");
-const PUBLIC_ENTRIES_TO_SYNC = ["404.html", "data", "favicon", "images", "social"];
+const OUTPUT_PATH = path.resolve(__dirname, "../public/data/menu.json");
 
 function normalizeHeader(header = "") {
   return String(header)
@@ -191,50 +186,11 @@ function workbookToMenuJson(workbook) {
   };
 }
 
-function writeJsonFile(outputPath, data) {
-  fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-  fs.writeFileSync(outputPath, `${JSON.stringify(data, null, 2)}\n`, "utf8");
-}
-
-function buildDocsMeta(data) {
-  return {
-    updatedAt: new Date().toISOString(),
-    source: "data/ZafiroMenu.xlsx",
-    menuUpdatedAt: data.updatedAt,
-    menuItemCount: data.count,
-    files: {
-      publicMenu: "public/data/menu.json",
-      docsMenu: "docs/data/menu.json",
-    },
-  };
-}
-
-function syncPublicToDocs() {
-  for (const entry of PUBLIC_ENTRIES_TO_SYNC) {
-    const sourcePath = path.join(PUBLIC_DIR, entry);
-    const targetPath = path.join(DOCS_DIR, entry);
-
-    if (!fs.existsSync(sourcePath)) {
-      continue;
-    }
-
-    fs.cpSync(sourcePath, targetPath, {
-      recursive: true,
-      force: true,
-    });
-  }
-}
-
 function saveMenuJson(data) {
-  writeJsonFile(PUBLIC_OUTPUT_PATH, data);
-  syncPublicToDocs();
-  writeJsonFile(DOCS_META_PATH, buildDocsMeta(data));
-
-  console.log(`OK menu.json generado en: ${PUBLIC_OUTPUT_PATH}`);
-  console.log(`OK public sincronizado en: ${DOCS_DIR}`);
-  console.log(`OK menu.json sincronizado en: ${DOCS_OUTPUT_PATH}`);
-  console.log(`OK meta de Pages actualizado en: ${DOCS_META_PATH}`);
-  console.log(`Items: ${data.count}`);
+  fs.mkdirSync(path.dirname(OUTPUT_PATH), { recursive: true });
+  fs.writeFileSync(OUTPUT_PATH, JSON.stringify(data, null, 2), "utf8");
+  console.log(`✅ menu.json generado en: ${OUTPUT_PATH}`);
+  console.log(`📦 Items: ${data.count}`);
 }
 
 module.exports = {

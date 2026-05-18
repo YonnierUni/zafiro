@@ -16,7 +16,6 @@ import {
   type MenuCategory,
   type MenuDataItem,
 } from '../models/menuData';
-import { MenuImagePlaceholder } from './MenuImagePlaceholder';
 import { SectionHeading } from './SectionHeading';
 
 interface FullMenuSectionProps {
@@ -158,13 +157,71 @@ export function FullMenuSection({ items, dictionary, locale }: FullMenuSectionPr
 
                     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                       {group.items.map((item, index) => (
-                        <FullMenuItemCard
+                        <motion.article
                           key={`${normalizedCategory}-${group.subgroup}-${item.slug}`}
-                          item={item}
-                          category={normalizeMenuCategory(item.tipo)}
-                          index={index}
-                          locale={locale}
-                        />
+                          initial={{ opacity: 0, y: 18 }}
+                          whileInView={{ opacity: 1, y: 0 }}
+                          viewport={{ once: true, amount: 0.12 }}
+                          transition={{ duration: 0.45, delay: index * 0.02 }}
+                          className="interactive-card group relative overflow-hidden rounded-[1.6rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(7,10,18,0.94))] shadow-[0_14px_34px_rgba(0,0,0,0.22)]"
+                        >
+                          {item.imagen ? (
+                            <div className="pointer-events-none absolute inset-0 overflow-hidden">
+                              <img
+                                src={resolveMenuImageSrc(item.imagen)}
+                                alt=""
+                                aria-hidden="true"
+                                className="absolute inset-0 h-full w-full scale-110 object-cover opacity-[0.12] blur-2xl saturate-[0.9]"
+                              />
+                              <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(36,107,255,0.12),_transparent_30%),linear-gradient(180deg,rgba(8,10,18,0.18),rgba(7,10,18,0.78)_58%,rgba(7,10,18,0.96)_100%)]" />
+                            </div>
+                          ) : null}
+                          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(36,107,255,0.12),_transparent_34%)] opacity-80" />
+                          {item.imagen ? (
+                            <div className="relative aspect-[1/1.02] overflow-hidden bg-[radial-gradient(circle_at_top,_rgba(36,107,255,0.12),_transparent_40%),linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.02))] px-2 pt-2 sm:px-3 sm:pt-3">
+                              <img
+                                src={resolveMenuImageSrc(item.imagen)}
+                                alt={`${sanitizeMenuText(item.name)} menu item`}
+                                loading="lazy"
+                                className="h-full w-full object-contain object-center drop-shadow-[0_22px_28px_rgba(0,0,0,0.28)] transition duration-500 group-hover:scale-[1.015]"
+                              />
+                              <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_transparent_50%,rgba(4,6,12,0.16)_100%)]" />
+                              <div className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-b from-transparent via-midnight/18 to-obsidian/95" />
+                              <div className="absolute inset-0 shadow-[inset_0_-52px_74px_rgba(4,6,12,0.52),inset_0_0_42px_rgba(0,0,0,0.1)]" />
+                            </div>
+                          ) : (
+                            <div className="border-b border-white/10 bg-[radial-gradient(circle_at_top_left,_rgba(36,107,255,0.16),_transparent_40%),rgba(255,255,255,0.03)] px-4 py-4">
+                              <p className="text-[0.68rem] uppercase tracking-[0.24em] text-cyanGlow/80">
+                                {getLocalizedCategoryLabel(normalizedCategory, locale)}
+                              </p>
+                            </div>
+                          )}
+
+                          <div className="relative -mt-7 rounded-t-[1.5rem] bg-gradient-to-b from-obsidian/84 via-obsidian/95 to-obsidian p-4 before:absolute before:inset-x-0 before:top-0 before:h-px before:bg-gradient-to-r before:from-transparent before:via-white/8 before:to-transparent sm:-mt-8 sm:p-5">
+                            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.02),_transparent_48%)]" />
+                            <div className="flex items-start justify-between gap-3">
+                              <h4 className="font-display text-[1.7rem] leading-tight text-ivory sm:text-[1.9rem]">
+                                {sanitizeMenuText(item.name)}
+                              </h4>
+                              <div className="flex flex-col items-end gap-2">
+                                {!isMenuItemAvailable(item) ? (
+                                  <span className="rounded-full border border-rose-200/20 bg-rose-200/10 px-3 py-1.5 text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-rose-100">
+                                    {getMenuAvailabilityLabel(locale)}
+                                  </span>
+                                ) : null}
+                                <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-amberGlow">
+                                  {formatMenuPrice(item.precioVenta)}
+                                </span>
+                              </div>
+                            </div>
+
+                            {getMenuItemDisplayDescription(item) ? (
+                              <p className="mt-3 text-sm leading-6 text-mist">
+                                {getMenuItemDisplayDescription(item)}
+                              </p>
+                            ) : null}
+                          </div>
+                        </motion.article>
                       ))}
                     </div>
                   </div>
@@ -175,90 +232,6 @@ export function FullMenuSection({ items, dictionary, locale }: FullMenuSectionPr
         })}
       </div>
     </section>
-  );
-}
-
-interface FullMenuItemCardProps {
-  category: MenuCategory;
-  index: number;
-  item: MenuDataItem;
-  locale: Locale;
-}
-
-function FullMenuItemCard({ category, index, item, locale }: FullMenuItemCardProps) {
-  const imageSrc = resolveMenuImageSrc(item.imagen);
-  const [hasImageError, setHasImageError] = useState(false);
-  const hasUsableImage = Boolean(imageSrc) && !hasImageError;
-  const displayName = sanitizeMenuText(item.name);
-  const displayDescription = getMenuItemDisplayDescription(item);
-
-  useEffect(() => {
-    setHasImageError(false);
-  }, [imageSrc]);
-
-  return (
-    <motion.article
-      initial={{ opacity: 0, y: 18 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, amount: 0.12 }}
-      transition={{ duration: 0.45, delay: index * 0.02 }}
-      className="interactive-card group relative overflow-hidden rounded-[1.6rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(7,10,18,0.94))] shadow-[0_14px_34px_rgba(0,0,0,0.22)]"
-    >
-      {hasUsableImage ? (
-        <div className="pointer-events-none absolute inset-0 overflow-hidden">
-          <img
-            src={imageSrc}
-            alt=""
-            aria-hidden="true"
-            onError={() => setHasImageError(true)}
-            className="absolute inset-0 h-full w-full scale-110 object-cover opacity-[0.12] blur-2xl saturate-[0.9]"
-          />
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(36,107,255,0.12),_transparent_30%),linear-gradient(180deg,rgba(8,10,18,0.18),rgba(7,10,18,0.78)_58%,rgba(7,10,18,0.96)_100%)]" />
-        </div>
-      ) : null}
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(36,107,255,0.12),_transparent_34%)] opacity-80" />
-      <div className="relative aspect-[1/1.02] overflow-hidden bg-[radial-gradient(circle_at_top,_rgba(36,107,255,0.12),_transparent_40%),linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.02))] px-2 pt-2 sm:px-3 sm:pt-3">
-        {hasUsableImage ? (
-          <img
-            src={imageSrc}
-            alt={`${displayName} menu item`}
-            loading="lazy"
-            onError={() => setHasImageError(true)}
-            className="h-full w-full object-contain object-center drop-shadow-[0_22px_28px_rgba(0,0,0,0.28)] transition duration-500 group-hover:scale-[1.015]"
-          />
-        ) : (
-          <MenuImagePlaceholder category={category} className="rounded-[1.25rem]" />
-        )}
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_transparent_50%,rgba(4,6,12,0.16)_100%)]" />
-        <div className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-b from-transparent via-midnight/18 to-obsidian/95" />
-        <div className="absolute inset-0 shadow-[inset_0_-52px_74px_rgba(4,6,12,0.52),inset_0_0_42px_rgba(0,0,0,0.1)]" />
-      </div>
-
-      <div className="relative -mt-7 rounded-t-[1.5rem] bg-gradient-to-b from-obsidian/84 via-obsidian/95 to-obsidian p-4 before:absolute before:inset-x-0 before:top-0 before:h-px before:bg-gradient-to-r before:from-transparent before:via-white/8 before:to-transparent sm:-mt-8 sm:p-5">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.02),_transparent_48%)]" />
-        <div className="flex items-start justify-between gap-3">
-          <h4 className="font-display text-[1.7rem] leading-tight text-ivory sm:text-[1.9rem]">
-            {displayName}
-          </h4>
-          <div className="flex flex-col items-end gap-2">
-            {!isMenuItemAvailable(item) ? (
-              <span className="rounded-full border border-rose-200/20 bg-rose-200/10 px-3 py-1.5 text-[0.64rem] font-semibold uppercase tracking-[0.18em] text-rose-100">
-                {getMenuAvailabilityLabel(locale)}
-              </span>
-            ) : null}
-            <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-amberGlow">
-              {formatMenuPrice(item.precioVenta)}
-            </span>
-          </div>
-        </div>
-
-        {displayDescription ? (
-          <p className="mt-3 text-sm leading-6 text-mist">
-            {displayDescription}
-          </p>
-        ) : null}
-      </div>
-    </motion.article>
   );
 }
 

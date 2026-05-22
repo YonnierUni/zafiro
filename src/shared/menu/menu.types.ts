@@ -2,6 +2,7 @@ export type MenuCategory = string;
 
 export interface MenuDataItem {
   id: number;
+  sourceKey?: string;
   orden: number;
   slug: string;
   name: string;
@@ -17,6 +18,8 @@ export interface MenuDataItem {
   visible: boolean;
   disponible: boolean;
   destacado: boolean;
+  updatedAt?: string;
+  createdAt?: string;
 }
 
 export interface MenuDataCollection {

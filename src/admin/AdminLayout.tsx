@@ -1,12 +1,15 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import zafiroLogoWhite from '../assets/zafiro-logo-white.png';
+import { useSupabaseAuth } from '../auth/SupabaseAuthProvider';
 
 interface AdminLayoutProps {
   children: ReactNode;
 }
 
 export function AdminLayout({ children }: AdminLayoutProps) {
+  const { isAuthenticated, signOut, user } = useSupabaseAuth();
+
   return (
     <div className="min-h-screen bg-obsidian text-ivory">
       <header className="sticky top-0 z-40 border-b border-white/10 bg-obsidian/80 backdrop-blur-xl">
@@ -21,12 +24,28 @@ export function AdminLayout({ children }: AdminLayoutProps) {
             </div>
           </div>
 
-          <Link
-            to="/"
-            className="interactive-button rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-ivory transition hover:border-cyanGlow/35 hover:bg-white/[0.08]"
-          >
-            Volver al sitio
-          </Link>
+          <div className="flex flex-wrap items-center justify-end gap-3">
+            {isAuthenticated ? (
+              <div className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-[0.68rem] uppercase tracking-[0.22em] text-mist">
+                {user?.email ?? 'Sesion activa'}
+              </div>
+            ) : null}
+            {isAuthenticated ? (
+              <button
+                type="button"
+                onClick={() => void signOut()}
+                className="interactive-button rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-ivory transition hover:border-cyanGlow/35 hover:bg-white/[0.08]"
+              >
+                Cerrar sesion
+              </button>
+            ) : null}
+            <Link
+              to="/"
+              className="interactive-button rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-ivory transition hover:border-cyanGlow/35 hover:bg-white/[0.08]"
+            >
+              Volver al sitio
+            </Link>
+          </div>
         </div>
       </header>
 

@@ -1,4 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
+import { RequireAdminAuth } from '../auth/RequireAdminAuth';
+import { AdminLoginView } from '../admin/AdminLoginView';
 import { AdminMenuView } from '../admin/AdminMenuView';
 import { AdminPosView } from '../admin/AdminPosView';
 import { AdminView } from '../admin/AdminView';
@@ -8,9 +10,12 @@ import { MenuView } from '../views/MenuView';
 export function AppRouter() {
   return (
     <Routes>
-      <Route path="/admin" element={<AdminView />} />
-      <Route path="/admin/menu" element={<AdminMenuView />} />
-      <Route path="/admin/pos" element={<AdminPosView />} />
+      <Route path="/admin/login" element={<AdminLoginView />} />
+      <Route element={<RequireAdminAuth />}>
+        <Route path="/admin" element={<AdminView />} />
+        <Route path="/admin/menu" element={<AdminMenuView />} />
+        <Route path="/admin/pos" element={<AdminPosView />} />
+      </Route>
       <Route path="/" element={<HomeView />} />
       <Route path="/menu" element={<MenuView />} />
       <Route path="*" element={<Navigate to="/" replace />} />

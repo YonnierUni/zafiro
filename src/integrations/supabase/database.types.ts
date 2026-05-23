@@ -77,6 +77,40 @@ export interface Database {
         Update: Partial<Database['public']['Tables']['pos_order_items']['Insert']>;
         Relationships: [];
       };
+      pos_sales_sessions: {
+        Row: {
+          business_date: string;
+          closed_at: string | null;
+          closed_by_email: string | null;
+          created_at: string;
+          cutoff_hour: number;
+          id: string;
+          notes: string;
+          opened_at: string;
+          opened_by_email: string;
+          session_label: string;
+          status: string;
+          summary: Record<string, unknown>;
+          updated_at: string;
+        };
+        Insert: {
+          business_date: string;
+          closed_at?: string | null;
+          closed_by_email?: string | null;
+          created_at?: string;
+          cutoff_hour?: number;
+          id?: string;
+          notes?: string;
+          opened_at?: string;
+          opened_by_email: string;
+          session_label: string;
+          status?: string;
+          summary?: Record<string, unknown>;
+          updated_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['pos_sales_sessions']['Insert']>;
+        Relationships: [];
+      };
       pos_order_status_logs: {
         Row: {
           actor_email: string;
@@ -119,6 +153,7 @@ export interface Database {
           notes: string;
           opened_at: string;
           opened_by_email: string;
+          sales_session_id: string | null;
           table_id: string;
           updated_at: string;
         };
@@ -133,6 +168,7 @@ export interface Database {
           notes?: string;
           opened_at?: string;
           opened_by_email: string;
+          sales_session_id?: string | null;
           table_id: string;
           updated_at?: string;
         };
@@ -158,6 +194,7 @@ export interface Database {
           rejected_at: string | null;
           rejected_by_email: string | null;
           rejection_reason: string | null;
+          sales_session_id: string | null;
           status: string;
           target_item_ids: unknown;
         };
@@ -179,6 +216,7 @@ export interface Database {
           rejected_at?: string | null;
           rejected_by_email?: string | null;
           rejection_reason?: string | null;
+          sales_session_id?: string | null;
           status?: string;
           target_item_ids?: unknown;
         };

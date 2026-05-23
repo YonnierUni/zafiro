@@ -5,7 +5,7 @@ import { useSupabaseAuth } from '../../auth/SupabaseAuthProvider';
 import { loadMenuData } from '../../controllers/menuController';
 import { isSupabaseConfigured } from '../../integrations/supabase/client';
 import { saveAdminMenuDraftsToSupabase } from '../../integrations/supabase/menuCatalogRepository';
-import { sanitizeMenuText } from '../../models/menuData';
+import { normalizeMenuCategory, sanitizeMenuText } from '../../models/menuData';
 import type { MenuDataCollection, MenuDataItem } from '../../shared/menu/menu.types';
 import { AdminLayout } from '../AdminLayout';
 import {
@@ -278,6 +278,57 @@ export function AdminMenuEditorView() {
         item.draftKey === selectedDraftKey ? updateAdminMenuDraftField(item, field, value) : item,
       ),
     );
+  };
+
+  const handleCreateProductDraft = () => {
+    const nextId = drafts.reduce((max, item) => Math.max(max, item.id), 0) + 1;
+    const fallbackCategory = filters.category !== 'all'
+      ? filters.category
+      : categoryOptions[0]?.value ?? normalizeMenuCategory(selectedItem?.tipo ?? 'bebidas');
+    const fallbackSubgroup = filters.subgroup !== 'all'
+      ? filters.subgroup
+      : selectedItem?.subgrupo?.trim() || 'General';
+    const nextOrder = drafts.reduce((max, item) => Math.max(max, parseDraftOrder(item.orden, item.original.orden)), 0) + 1;
+    const nextName = `Nuevo producto ${nextId}`;
+    const nextSlug = `nuevo-producto-${nextId}`;
+    const nextOriginal: MenuDataItem = {
+      id: nextId,
+      orden: 0,
+      slug: '',
+      name: '',
+      description: '',
+      tipo: '',
+      subgrupo: '',
+      ingredientes: '',
+      preparacion: '',
+      emplatado: '',
+      precioVenta: null,
+      imagen: '',
+      hojaOrigen: '',
+      visible: false,
+      disponible: false,
+      destacado: false,
+    };
+
+    const nextDraft = mapMenuItemToDraft(
+      {
+        ...nextOriginal,
+        orden: nextOrder,
+        slug: nextSlug,
+        name: nextName,
+        tipo: humanizeAdminLabel(fallbackCategory),
+        subgrupo: fallbackSubgroup,
+        hojaOrigen: fallbackSubgroup,
+        visible: true,
+        disponible: true,
+      },
+      `new::${nextId}`,
+    );
+
+    setDrafts((current) => [nextDraft, ...current]);
+    setSelectedDraftKey(nextDraft.draftKey);
+    setActiveSection('editor');
+    setExportFeedback(`Se creo un borrador nuevo para ${nextDraft.name}. Completa la ficha y luego guardala en Supabase.`);
   };
 
   const resetSelectedItem = () => {
@@ -836,6 +887,19 @@ export function AdminMenuEditorView() {
                   <InlineMetric label="Payload listo" value={isPayloadReady ? 'Si' : 'No'} />
                   <InlineMetric label="Persistencia" value="Pendiente" />
                 </div>
+              </div>
+
+              <div className="mt-5 flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  onClick={handleCreateProductDraft}
+                  className="interactive-button rounded-full border border-cyanGlow/28 bg-cyanGlow/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-cyanGlow"
+                >
+                  Nuevo producto
+                </button>
+                <p className="text-sm leading-7 text-mist">
+                  Crea un borrador nuevo dentro del catálogo actual y guárdalo luego en Supabase junto con los demás cambios.
+                </p>
               </div>
             </section>
 

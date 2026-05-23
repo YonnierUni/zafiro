@@ -75,6 +75,7 @@ execute function public.set_updated_at();
 create table if not exists public.pos_orders (
   id uuid primary key default gen_random_uuid(),
   table_id uuid not null references public.pos_tables(id) on delete cascade,
+  sales_session_id uuid,
   financial_status text not null check (financial_status in ('pending_payment', 'partially_paid', 'paid_total', 'cancelled')) default 'pending_payment',
   opened_at timestamptz not null default timezone('utc', now()),
   closed_at timestamptz,
@@ -137,6 +138,7 @@ create index if not exists pos_order_items_prep_area_idx on public.pos_order_ite
 create table if not exists public.pos_payments (
   id uuid primary key default gen_random_uuid(),
   order_id uuid not null references public.pos_orders(id) on delete cascade,
+  sales_session_id uuid,
   method text not null check (method in ('cash', 'nequi', 'bank_transfer', 'card', 'other')),
   status text not null check (status in ('pending', 'confirmed', 'rejected')) default 'pending',
   allocation_mode text not null check (allocation_mode in ('total', 'amount', 'percentage', 'items')),
@@ -158,6 +160,47 @@ create table if not exists public.pos_payments (
 
 create index if not exists pos_payments_order_idx on public.pos_payments(order_id);
 create index if not exists pos_payments_status_idx on public.pos_payments(status);
+
+create table if not exists public.pos_sales_sessions (
+  id uuid primary key default gen_random_uuid(),
+  session_label text not null,
+  business_date date not null,
+  status text not null check (status in ('open', 'closed')) default 'open',
+  opened_at timestamptz not null default timezone('utc', now()),
+  opened_by_email text not null,
+  closed_at timestamptz,
+  closed_by_email text,
+  cutoff_hour integer not null default 18 check (cutoff_hour between 0 and 23),
+  notes text not null default '',
+  summary jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+drop trigger if exists trg_pos_sales_sessions_set_updated_at on public.pos_sales_sessions;
+create trigger trg_pos_sales_sessions_set_updated_at
+before update on public.pos_sales_sessions
+for each row
+execute function public.set_updated_at();
+
+alter table public.pos_orders
+  drop constraint if exists pos_orders_sales_session_id_fkey;
+
+alter table public.pos_orders
+  add constraint pos_orders_sales_session_id_fkey
+  foreign key (sales_session_id) references public.pos_sales_sessions(id) on delete set null;
+
+alter table public.pos_payments
+  drop constraint if exists pos_payments_sales_session_id_fkey;
+
+alter table public.pos_payments
+  add constraint pos_payments_sales_session_id_fkey
+  foreign key (sales_session_id) references public.pos_sales_sessions(id) on delete set null;
+
+create index if not exists pos_orders_sales_session_idx on public.pos_orders(sales_session_id);
+create index if not exists pos_payments_sales_session_idx on public.pos_payments(sales_session_id);
+create index if not exists pos_sales_sessions_status_idx on public.pos_sales_sessions(status, opened_at desc);
+create index if not exists pos_sales_sessions_business_date_idx on public.pos_sales_sessions(business_date desc);
 
 create table if not exists public.pos_order_status_logs (
   id uuid primary key default gen_random_uuid(),
@@ -183,6 +226,7 @@ alter table public.pos_tables enable row level security;
 alter table public.pos_orders enable row level security;
 alter table public.pos_order_items enable row level security;
 alter table public.pos_payments enable row level security;
+alter table public.pos_sales_sessions enable row level security;
 alter table public.pos_order_status_logs enable row level security;
 
 drop policy if exists "staff_profiles_read_self_or_admin" on public.staff_profiles;
@@ -245,6 +289,13 @@ for all
 using (public.is_pos_staff())
 with check (public.is_pos_staff());
 
+drop policy if exists "pos_sales_sessions_staff_access" on public.pos_sales_sessions;
+create policy "pos_sales_sessions_staff_access"
+on public.pos_sales_sessions
+for all
+using (public.is_pos_staff())
+with check (public.is_pos_staff());
+
 drop policy if exists "pos_logs_staff_access" on public.pos_order_status_logs;
 create policy "pos_logs_staff_access"
 on public.pos_order_status_logs
@@ -258,4 +309,5 @@ grant select, insert, update, delete on public.pos_tables to authenticated;
 grant select, insert, update on public.pos_orders to authenticated;
 grant select, insert, update on public.pos_order_items to authenticated;
 grant select, insert, update on public.pos_payments to authenticated;
+grant select, insert, update on public.pos_sales_sessions to authenticated;
 grant select, insert, update on public.pos_order_status_logs to authenticated;

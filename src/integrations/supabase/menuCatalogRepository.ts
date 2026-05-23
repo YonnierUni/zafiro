@@ -68,7 +68,7 @@ export async function saveAdminMenuDraftsToSupabase(
 
   const rowsToUpsert = readyDrafts.map(mapDraftToMenuItemInsert);
   const logsToInsert = readyDrafts.map((draft) => ({
-    menu_item_source_key: draft.original.sourceKey ?? buildMenuSourceKey(draft.original),
+    menu_item_source_key: resolveDraftSourceKey(draft),
     item_slug: draft.slug,
     change_source: options.changeSource ?? 'admin_menu',
     actor_label: options.actorLabel ?? 'anonymous-admin',
@@ -150,7 +150,7 @@ function mapRowToMenuItem(row: MenuItemRow): MenuDataItem {
 
 function mapDraftToMenuItemInsert(draft: AdminMenuDraftItem): MenuItemInsert {
   return {
-    source_key: draft.original.sourceKey ?? buildMenuSourceKey(draft.original),
+    source_key: resolveDraftSourceKey(draft),
     legacy_id: draft.id,
     slug: draft.slug,
     hoja_origen: draft.hojaOrigen,
@@ -168,6 +168,15 @@ function mapDraftToMenuItemInsert(draft: AdminMenuDraftItem): MenuItemInsert {
     destacado: draft.destacado,
     orden: parseOrder(draft.orden, draft.original.orden),
   };
+}
+
+function resolveDraftSourceKey(draft: AdminMenuDraftItem) {
+  return draft.original.sourceKey ??
+    buildMenuSourceKey({
+      hojaOrigen: draft.hojaOrigen,
+      slug: draft.slug,
+      id: draft.id,
+    });
 }
 
 function mapDraftBackToMenuDataItem(draft: AdminMenuDraftItem): MenuDataItem {

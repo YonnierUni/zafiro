@@ -26,6 +26,8 @@ export type PaymentStatus = 'pending' | 'confirmed' | 'rejected';
 
 export type PaymentAllocationMode = 'total' | 'amount' | 'percentage' | 'items';
 
+export type PosSalesSessionStatus = 'open' | 'closed';
+
 export interface StaffProfile {
   email: string;
   fullName: string;
@@ -87,6 +89,7 @@ export interface PosOrderItem {
 export interface PosPayment {
   id: string;
   orderId: string;
+  salesSessionId?: string | null;
   method: PaymentMethod;
   status: PaymentStatus;
   allocationMode: PaymentAllocationMode;
@@ -109,6 +112,7 @@ export interface PosPayment {
 export interface PosOrder {
   id: string;
   tableId: string;
+  salesSessionId?: string | null;
   financialStatus: OrderFinancialStatus;
   openedAt: string;
   closedAt?: string | null;
@@ -128,6 +132,49 @@ export interface PosOrderComputedSummary {
   remainingBalance: number;
   pendingPayments: number;
   confirmedPayments: number;
+}
+
+export interface PosSalesSessionPaymentMethodSummary {
+  method: PaymentMethod;
+  paymentCount: number;
+  totalAmount: number;
+}
+
+export interface PosSalesSessionProductSummary {
+  menuItemSourceKey?: string | null;
+  prepArea: PreparationArea;
+  productName: string;
+  quantity: number;
+  totalAmount: number;
+}
+
+export interface PosSalesSessionSummary {
+  confirmedPayments: number;
+  deliveredProducts: number;
+  grossSales: number;
+  openOrders: number;
+  orderCount: number;
+  paymentMethods: PosSalesSessionPaymentMethodSummary[];
+  pendingBalance: number;
+  pendingPayments: number;
+  products: PosSalesSessionProductSummary[];
+  totalCollected: number;
+}
+
+export interface PosSalesSession {
+  id: string;
+  sessionLabel: string;
+  businessDate: string;
+  status: PosSalesSessionStatus;
+  openedAt: string;
+  openedByEmail: string;
+  closedAt?: string | null;
+  closedByEmail?: string | null;
+  cutoffHour: number;
+  notes: string;
+  summary: PosSalesSessionSummary | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface PosOrderStatusLog {
@@ -158,8 +205,11 @@ export interface PosState {
   generatedAt: string;
   roles: StaffRole[];
   staffProfile: StaffProfile | null;
+  activeSalesSession: PosSalesSession | null;
+  recentSalesSessions: PosSalesSession[];
   tables: PosTableWithOrder[];
   openOrders: PosOrderWithRelations[];
+  closedSales: PosOrderWithRelations[];
   pendingPreparationKitchen: PosOrderItem[];
   pendingPreparationBar: PosOrderItem[];
   pendingPayments: PosPayment[];

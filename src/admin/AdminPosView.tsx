@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+﻿import type { ReactNode } from 'react';
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { AdminLayout } from './AdminLayout';
 import { useSupabaseAuth } from '../auth/SupabaseAuthProvider';
@@ -11,6 +11,8 @@ import type {
   PosOrderWithRelations,
   PosPayment,
   PosProductOption,
+  PosSalesSession,
+  PosSalesSessionSummary,
   PosState,
   PosTable,
   PosTableWithOrder,
@@ -20,12 +22,14 @@ import type {
 import {
   addItemsToTableInSupabase,
   cancelOrderItemInSupabase,
+  closeActiveSalesSessionInSupabase,
   createPosTableInSupabase,
   deletePosTableInSupabase,
   loadPosProductOptionsFromSupabase,
   loadPosStateFromSupabase,
   markOrderItemDeliveredInSupabase,
   markOrderItemPickingUpInSupabase,
+  openSalesSessionInSupabase,
   recordPosPaymentInSupabase,
   replaceOrderItemInSupabase,
   sendDraftItemsToPreparationInSupabase,
@@ -33,9 +37,11 @@ import {
   transitionPreparationItemInSupabase,
   updateOrderItemInSupabase,
   updatePosPaymentStatusInSupabase,
+  type PosRealtimeEvent,
 } from '../integrations/supabase/posOperationsRepository';
 
 type WorkspaceTab = 'floor' | 'kitchen' | 'bar' | 'cashier';
+type CashierRightPanel = 'summary' | 'previous_sessions' | 'validations' | 'movements';
 
 const roleLabels: Record<StaffRole, string> = {
   superadmin: 'Superadmin',
@@ -151,7 +157,12 @@ export function AdminPosView() {
   const [activePaymentField, setActivePaymentField] = useState<'amount' | 'percentage' | 'received' | null>(null);
   const [paymentReference, setPaymentReference] = useState('');
   const [paymentNotes, setPaymentNotes] = useState('');
+  const [salesSessionClosingNotes, setSalesSessionClosingNotes] = useState('');
+  const [salesSessionOpeningNotes, setSalesSessionOpeningNotes] = useState('');
   const [selectedPaymentItemIds, setSelectedPaymentItemIds] = useState<string[]>([]);
+  const [cashierRightPanel, setCashierRightPanel] = useState<CashierRightPanel>('summary');
+  const [selectedHistoricalSessionId, setSelectedHistoricalSessionId] = useState<string | null>(null);
+  const [highlightedPendingPaymentId, setHighlightedPendingPaymentId] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -160,6 +171,21 @@ export function AdminPosView() {
   const trailingSyncTimerRef = useRef<number | null>(null);
   const suppressAutoSyncUntilRef = useRef(0);
   const loadStateRef = useRef<(initial?: boolean) => Promise<void>>(async () => {});
+  const historicalSessionHeaderRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const cashierPaymentPanelRef = useRef<HTMLDivElement | null>(null);
+  const pendingPaymentCardRefs = useRef<Record<string, HTMLElement | null>>({});
+  const shouldFocusCashierPaymentPanelRef = useRef(false);
+  const posStateRef = useRef<PosState | null>(null);
+  const activeTabRef = useRef<WorkspaceTab>('floor');
+  const actorRef = useRef(actor);
+  const workspaceAccessRef = useRef({
+    canOperateBar,
+    canOperateCashier,
+    canOperateFloor,
+    canOperateKitchen,
+  });
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const recentRealtimeNotificationKeysRef = useRef<Map<string, number>>(new Map());
   const deferredProductSearch = useDeferredValue(productSearch);
 
   const shouldSuppressBackgroundSync = () => Date.now() < suppressAutoSyncUntilRef.current;
@@ -176,9 +202,52 @@ export function AdminPosView() {
   };
 
   const markLocalMutationCommitted = () => {
-    suppressAutoSyncUntilRef.current = Date.now() + 900;
-    scheduleTrailingSync(980);
+    suppressAutoSyncUntilRef.current = Date.now() + 220;
+    scheduleTrailingSync(320);
   };
+
+  useEffect(() => {
+    posStateRef.current = posState;
+  }, [posState]);
+
+  useEffect(() => {
+    activeTabRef.current = activeTab;
+  }, [activeTab]);
+
+  useEffect(() => {
+    actorRef.current = actor;
+  }, [actor]);
+
+  useEffect(() => {
+    workspaceAccessRef.current = {
+      canOperateBar,
+      canOperateCashier,
+      canOperateFloor,
+      canOperateKitchen,
+    };
+  }, [canOperateBar, canOperateCashier, canOperateFloor, canOperateKitchen]);
+
+  useEffect(() => {
+    const unlockAudioAndNotifications = () => {
+      if (typeof window !== 'undefined' && 'AudioContext' in window) {
+        const AudioContextCtor = window.AudioContext;
+        if (!audioContextRef.current) {
+          audioContextRef.current = new AudioContextCtor();
+        }
+
+        if (audioContextRef.current.state === 'suspended') {
+          void audioContextRef.current.resume().catch(() => {});
+        }
+      }
+
+      if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+        void Notification.requestPermission().catch(() => {});
+      }
+    };
+
+    window.addEventListener('pointerdown', unlockAudioAndNotifications, { once: true });
+    return () => window.removeEventListener('pointerdown', unlockAudioAndNotifications);
+  }, []);
 
   useEffect(() => {
     if (!workspaceTabs.length) {
@@ -216,6 +285,31 @@ export function AdminPosView() {
 
   useEffect(() => {
     let isMounted = true;
+
+    const handleRealtimeEvent = (event: PosRealtimeEvent) => {
+      const realtimeSignal = resolveRealtimeSignal(event, posStateRef.current, actorRef.current.email);
+      if (!realtimeSignal) {
+        return;
+      }
+
+      const currentTab = activeTabRef.current;
+      const access = workspaceAccessRef.current;
+      const shouldNotify =
+        (realtimeSignal.target === 'kitchen' && currentTab === 'kitchen' && access.canOperateKitchen) ||
+        (realtimeSignal.target === 'bar' && currentTab === 'bar' && access.canOperateBar) ||
+        (realtimeSignal.target === 'floor' && currentTab === 'floor' && access.canOperateFloor) ||
+        (realtimeSignal.target === 'cashier' && currentTab === 'cashier' && access.canOperateCashier);
+
+      if (!shouldNotify) {
+        return;
+      }
+
+      triggerRealtimeAttention(
+        realtimeSignal,
+        audioContextRef.current,
+        recentRealtimeNotificationKeysRef.current,
+      );
+    };
 
     const loadState = async (initial = false) => {
       try {
@@ -262,8 +356,8 @@ export function AdminPosView() {
 
       realtimeTimerRef.current = window.setTimeout(() => {
         void loadState(false);
-      }, 45);
-    });
+      }, 12);
+    }, handleRealtimeEvent);
 
     const handleVisibilitySync = () => {
       if (document.visibilityState === 'visible' && !shouldSuppressBackgroundSync()) {
@@ -381,9 +475,11 @@ export function AdminPosView() {
     !requiresCashReceived ||
     (parsedPaymentReceived != null && parsedPaymentReceived > 0 && parsedPaymentReceived >= paymentPreview.amountApplied);
   const isItemsPaymentSelectionValid = paymentMode !== 'items' || (selectedPaymentItemIds.length > 0 && paymentPreview.amountApplied > 0 && paymentPreview.overage <= 0);
+  const selectedOrderHasPendingPayment = selectedOrder?.payments.some((payment) => payment.status === 'pending') ?? false;
   const canSubmitPayment =
     Boolean(selectedOrder) &&
     !busyAction &&
+    !selectedOrderHasPendingPayment &&
     paymentPreview.amountApplied > 0 &&
     paymentPreview.overage <= 0 &&
     isPaymentAmountValid &&
@@ -393,6 +489,7 @@ export function AdminPosView() {
 
   const kitchenQueue = posState?.pendingPreparationKitchen ?? [];
   const barQueue = posState?.pendingPreparationBar ?? [];
+  const closedSales = posState?.closedSales ?? [];
   const cashierTables = useMemo(
     () =>
       (posState?.tables ?? []).filter(
@@ -400,6 +497,7 @@ export function AdminPosView() {
       ),
     [posState?.tables],
   );
+  const allCashierOrders = useMemo(() => [...(posState?.openOrders ?? []), ...closedSales], [closedSales, posState?.openOrders]);
   const selectedReadyCount = selectedOrder?.items.filter((item) => item.operationalStatus === 'ready').length ?? 0;
   const selectedPickingUpCount = selectedOrder?.items.filter((item) => item.operationalStatus === 'picking_up').length ?? 0;
   const selectedPendingDeliveryCount = selectedReadyCount + selectedPickingUpCount;
@@ -437,6 +535,114 @@ export function AdminPosView() {
       return right.createdAt.localeCompare(left.createdAt);
     });
   }, [selectedOrder]);
+  const activeSalesSessionSummary = useMemo(
+    () => buildLiveSalesSessionSummary(posState?.activeSalesSession ?? null, allCashierOrders),
+    [allCashierOrders, posState?.activeSalesSession],
+  );
+  const ordersById = useMemo(() => new Map(allCashierOrders.map((order) => [order.id, order])), [allCashierOrders]);
+  const tablesById = useMemo(() => new Map((posState?.tables ?? []).map((table) => [table.id, table])), [posState?.tables]);
+  const activeSalesSessionOrders = useMemo(() => {
+    if (!posState?.activeSalesSession) {
+      return [] as PosOrderWithRelations[];
+    }
+
+    return allCashierOrders.filter((order) => order.salesSessionId === posState.activeSalesSession?.id);
+  }, [allCashierOrders, posState?.activeSalesSession]);
+  const previousClosedSessions = useMemo(
+    () => (posState?.recentSalesSessions ?? []).filter((session) => session.status === 'closed'),
+    [posState?.recentSalesSessions],
+  );
+  const activeSalesSessionClosedSales = useMemo(
+    () => activeSalesSessionOrders.filter((order) => order.closedAt != null).sort((left, right) => (right.closedAt ?? '').localeCompare(left.closedAt ?? '')),
+    [activeSalesSessionOrders],
+  );
+  const selectedHistoricalSession = selectedHistoricalSessionId
+    ? previousClosedSessions.find((session) => session.id === selectedHistoricalSessionId) ?? null
+    : null;
+  const selectedHistoricalSessionSales = useMemo(
+    () =>
+      selectedHistoricalSession
+        ? closedSales
+            .filter((order) => order.salesSessionId === selectedHistoricalSession.id)
+            .sort((left, right) => (right.closedAt ?? right.updatedAt).localeCompare(left.closedAt ?? left.updatedAt))
+        : [],
+    [closedSales, selectedHistoricalSession],
+  );
+  const sessionOpenTableCount = activeSalesSessionOrders.filter((order) => order.closedAt == null).length;
+  const sessionClosedTableCount = activeSalesSessionClosedSales.length;
+
+  useEffect(() => {
+    if (!previousClosedSessions.length) {
+      if (selectedHistoricalSessionId) {
+        setSelectedHistoricalSessionId(null);
+      }
+      return;
+    }
+
+    if (selectedHistoricalSessionId && !previousClosedSessions.some((session) => session.id === selectedHistoricalSessionId)) {
+      setSelectedHistoricalSessionId(previousClosedSessions[0].id);
+    }
+  }, [previousClosedSessions, selectedHistoricalSessionId]);
+
+  useEffect(() => {
+    if (cashierRightPanel !== 'previous_sessions' || !selectedHistoricalSessionId) {
+      return;
+    }
+
+    const header = historicalSessionHeaderRefs.current[selectedHistoricalSessionId];
+    if (!header) {
+      return;
+    }
+
+    const focusAndReveal = window.requestAnimationFrame(() => {
+      header.focus({ preventScroll: true });
+      header.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+
+    return () => window.cancelAnimationFrame(focusAndReveal);
+  }, [cashierRightPanel, selectedHistoricalSessionId]);
+
+  useEffect(() => {
+    if (!shouldFocusCashierPaymentPanelRef.current || activeTab !== 'cashier' || !selectedTableId) {
+      return;
+    }
+
+    shouldFocusCashierPaymentPanelRef.current = false;
+
+    if (!window.matchMedia('(max-width: 1279px)').matches) {
+      return;
+    }
+
+    const paymentPanel = cashierPaymentPanelRef.current;
+    if (!paymentPanel) {
+      return;
+    }
+
+    const focusAndReveal = window.requestAnimationFrame(() => {
+      paymentPanel.focus({ preventScroll: true });
+      paymentPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+
+    return () => window.cancelAnimationFrame(focusAndReveal);
+  }, [activeTab, selectedTableId]);
+
+  useEffect(() => {
+    if (cashierRightPanel !== 'validations' || !highlightedPendingPaymentId) {
+      return;
+    }
+
+    const pendingCard = pendingPaymentCardRefs.current[highlightedPendingPaymentId];
+    if (!pendingCard) {
+      return;
+    }
+
+    const focusAndReveal = window.requestAnimationFrame(() => {
+      pendingCard.focus({ preventScroll: true });
+      pendingCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+
+    return () => window.cancelAnimationFrame(focusAndReveal);
+  }, [cashierRightPanel, highlightedPendingPaymentId]);
 
   useEffect(() => {
     if (activeTab !== 'cashier') {
@@ -719,6 +925,12 @@ export function AdminPosView() {
           setPaymentReference('');
           setPaymentNotes('');
           setSelectedPaymentItemIds([]);
+          if (payment.status === 'pending') {
+            setCashierRightPanel('validations');
+            setHighlightedPendingPaymentId(payment.id);
+          } else {
+            setHighlightedPendingPaymentId(null);
+          }
         },
       },
     );
@@ -729,6 +941,7 @@ export function AdminPosView() {
     await executeAction('Pago confirmado', async () => updatePosPaymentStatusInSupabase(paymentId, { status: 'confirmed' }, actor, payment), {
       onSuccess: (updatedPayment) => {
         setPosState((current) => (current ? mergePaymentIntoPosState(current, updatedPayment) : current));
+        setHighlightedPendingPaymentId((current) => (current === paymentId ? null : current));
       },
     });
   };
@@ -743,6 +956,53 @@ export function AdminPosView() {
     await executeAction('Pago rechazado', async () => updatePosPaymentStatusInSupabase(paymentId, { rejectionReason: reason, status: 'rejected' }, actor, payment), {
       onSuccess: (updatedPayment) => {
         setPosState((current) => (current ? mergePaymentIntoPosState(current, updatedPayment) : current));
+        setHighlightedPendingPaymentId((current) => (current === paymentId ? null : current));
+      },
+    });
+  };
+
+  const handleCloseActiveSalesSession = async () => {
+    await executeAction('Jornada cerrada', async () => closeActiveSalesSessionInSupabase(actor, salesSessionClosingNotes), {
+      onSuccess: (closedSession) => {
+        setPosState((current) => {
+          if (!current) {
+            return current;
+          }
+
+          const nextRecentSessions = [
+            closedSession,
+            ...current.recentSalesSessions.filter((session) => session.id !== closedSession.id),
+          ].slice(0, 10);
+
+          return {
+            ...current,
+            activeSalesSession: null,
+            recentSalesSessions: nextRecentSessions,
+          };
+        });
+        setCashierRightPanel('previous_sessions');
+        setSelectedHistoricalSessionId(closedSession.id);
+        setSalesSessionClosingNotes('');
+      },
+    });
+  };
+
+  const handleOpenSalesSession = async () => {
+    await executeAction('Jornada abierta', async () => openSalesSessionInSupabase(actor, salesSessionOpeningNotes), {
+      onSuccess: (openedSession) => {
+        setPosState((current) => {
+          if (!current) {
+            return current;
+          }
+
+          return {
+            ...current,
+            activeSalesSession: openedSession,
+            recentSalesSessions: [openedSession, ...current.recentSalesSessions.filter((session) => session.id !== openedSession.id)].slice(0, 10),
+          };
+        });
+        setCashierRightPanel('summary');
+        setSalesSessionOpeningNotes('');
       },
     });
   };
@@ -1451,44 +1711,50 @@ export function AdminPosView() {
 
       {activeTab === 'cashier' && canOperateCashier ? (
         <section className="mt-8 grid gap-6 xl:grid-cols-[minmax(18rem,0.82fr)_minmax(0,1.15fr)_minmax(0,0.95fr)]">
-          <Panel title="Cuentas activas para caja" subtitle="La caja puede cambiar de mesa desde aqui, sin depender de otra pestaña.">
-            <div className="space-y-3">
-              {cashierTables.map((table) => (
-                <button
-                  key={table.id}
-                  type="button"
-                  onClick={() => setSelectedTableId(table.id)}
-                  className={`w-full rounded-[1.2rem] border p-4 text-left transition ${
-                    selectedTable?.id === table.id ? 'border-cyanGlow/28 bg-cyanGlow/10' : 'border-white/8 bg-white/[0.02]'
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-[0.68rem] uppercase tracking-[0.22em] text-cyanGlow/75">{table.code}</p>
-                      <p className="mt-2 font-semibold text-ivory">{table.name}</p>
+          <div className="space-y-5">
+            <Panel title="Cuentas activas para caja" subtitle="La caja puede cambiar de mesa desde aquí, sin depender de otra pestaña.">
+              <div className="space-y-3">
+                {cashierTables.map((table) => (
+                  <button
+                    key={table.id}
+                    type="button"
+                    onClick={() => {
+                      shouldFocusCashierPaymentPanelRef.current = true;
+                      setSelectedTableId(table.id);
+                    }}
+                    className={`w-full rounded-[1.2rem] border p-4 text-left transition ${
+                      selectedTable?.id === table.id ? 'border-cyanGlow/28 bg-cyanGlow/10' : 'border-white/8 bg-white/[0.02]'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-[0.68rem] uppercase tracking-[0.22em] text-cyanGlow/75">{table.code}</p>
+                        <p className="mt-2 font-semibold text-ivory">{table.name}</p>
+                      </div>
+                      <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[0.65rem] uppercase tracking-[0.22em] text-mist">
+                        {table.activeOrder ? financialStatusLabels[table.activeOrder.financialStatus] : tableStatusLabels[table.status]}
+                      </span>
                     </div>
-                    <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[0.65rem] uppercase tracking-[0.22em] text-mist">
-                      {table.activeOrder ? financialStatusLabels[table.activeOrder.financialStatus] : tableStatusLabels[table.status]}
-                    </span>
-                  </div>
-                  {table.activeOrder ? (
-                    <div className="mt-3 grid gap-2 text-sm text-mist sm:grid-cols-2">
-                      <p>Total: {formatCurrency(table.activeOrder.summary.totalDue)}</p>
-                      <p>Saldo: {formatCurrency(table.activeOrder.summary.remainingBalance)}</p>
-                    </div>
-                  ) : null}
-                </button>
-              ))}
-              {!cashierTables.length ? <EmptyState message="No hay mesas con saldo o pagos pendientes por confirmar en este momento." /> : null}
-            </div>
-          </Panel>
+                    {table.activeOrder ? (
+                      <div className="mt-3 grid gap-2 text-sm text-mist sm:grid-cols-2">
+                        <p>Total: {formatCurrency(table.activeOrder.summary.totalDue)}</p>
+                        <p>Saldo: {formatCurrency(table.activeOrder.summary.remainingBalance)}</p>
+                      </div>
+                    ) : null}
+                  </button>
+                ))}
+                {!cashierTables.length ? <EmptyState message="No hay mesas con saldo o pagos pendientes por confirmar en este momento." /> : null}
+              </div>
+            </Panel>
+          </div>
 
-          <Panel
-            title={selectedTable ? `Cobro de ${selectedTable.name} · ${selectedTable.code}` : 'Cobro de mesa'}
-            subtitle="Abonos parciales, total, por porcentaje o por productos"
-          >
-            {selectedOrder ? (
-              <>
+          <div ref={cashierPaymentPanelRef} tabIndex={-1} className="focus:outline-none">
+            <Panel
+              title={selectedTable ? `Cobro de ${selectedTable.name} · ${selectedTable.code}` : 'Cobro de mesa'}
+              subtitle="Abonos parciales, total, por porcentaje o por productos"
+            >
+              {selectedOrder ? (
+                <>
                 <div className="grid gap-3 md:grid-cols-3">
                   <SummaryPill label="Total cuenta" value={formatCurrency(selectedOrder.summary.totalDue)} />
                   <SummaryPill label="Pagado" value={formatCurrency(selectedOrder.summary.totalPaid)} />
@@ -1600,8 +1866,13 @@ export function AdminPosView() {
 
                 <div className="mt-4 grid gap-3 md:grid-cols-2">
                   <SummaryPill label="Aplicar" value={formatCurrency(paymentPreview.amountApplied)} />
-                  <SummaryPill label="Cambio" value={formatCurrency(paymentPreview.changeDue)} />
+                  <SummaryPill label="Cambio / devuelta" value={formatCurrency(paymentPreview.changeDue)} />
                 </div>
+                {paymentMethod === 'cash' && paymentPreview.changeDue > 0 ? (
+                  <div className="mt-3 rounded-[1rem] border border-emerald-300/20 bg-emerald-300/10 px-4 py-3 text-sm font-medium text-emerald-100">
+                    Devuelta estimada: {formatCurrency(paymentPreview.changeDue)}
+                  </div>
+                ) : null}
                 {paymentMode === 'items' ? (
                   <div className="mt-3 grid gap-3 md:grid-cols-2">
                     <SummaryPill label="Seleccionado" value={formatCurrency(paymentPreview.selectedRawAmount)} />
@@ -1613,44 +1884,539 @@ export function AdminPosView() {
                     Seleccionaste mas unidades de las que siguen pendientes. Quita algunas antes de registrar el pago.
                   </p>
                 ) : null}
+                {selectedOrderHasPendingPayment ? (
+                  <p className="mt-3 text-sm text-amberGlow">
+                    Esta cuenta ya tiene un pago pendiente por validar. Confirma o rechaza ese movimiento antes de registrar uno nuevo.
+                  </p>
+                ) : null}
 
                 <button type="button" onClick={() => void handleRecordPayment()} disabled={!canSubmitPayment} className={`${primaryButtonClassName} mt-4`}>
                   Registrar pago
                 </button>
-              </>
-            ) : (
-              <EmptyState message="Selecciona una mesa con cuenta activa desde la columna izquierda para operar la caja." />
-            )}
-          </Panel>
+                </>
+              ) : (
+                <EmptyState message="Selecciona una mesa con cuenta activa desde la columna izquierda para operar la caja." />
+              )}
+            </Panel>
+          </div>
 
-          <Panel title="Pagos pendientes de confirmacion" subtitle="Nequi y transferencias se confirman sin refrescar">
-            <div className="space-y-3">
-              {(posState?.pendingPayments ?? []).map((payment) => (
-                <article key={payment.id} className="rounded-[1.2rem] border border-white/8 bg-white/[0.02] p-4">
+          <Panel
+            title={
+              cashierRightPanel === 'summary'
+                ? 'Jornada y resumen del dia'
+                : cashierRightPanel === 'previous_sessions'
+                  ? 'Jornadas previas'
+                  : cashierRightPanel === 'validations'
+                    ? 'Validaciones'
+                    : 'Movimientos recientes'
+            }
+            subtitle={
+              cashierRightPanel === 'summary'
+                ? 'Desde aqui controlas la jornada y ves el pulso real de caja sin perder el contexto del turno.'
+                : cashierRightPanel === 'previous_sessions'
+                  ? 'Cada jornada cerrada agrupa sus mesas, productos, pagos y cierre en un solo lugar.'
+                  : cashierRightPanel === 'validations'
+                    ? 'Transferencias y Nequi solo cuando haga falta revisarlas manualmente.'
+                    : 'Ultimos eventos operativos y de caja para seguirle la pista al turno.'
+            }
+          >
+            <div className="mb-5 flex flex-wrap gap-2">
+              {([
+                ['summary', 'Jornada'],
+                ['previous_sessions', `Jornadas previas${previousClosedSessions.length ? ` (${previousClosedSessions.length})` : ''}`],
+                ['validations', `Validaciones${(posState?.pendingPayments.length ?? 0) ? ` (${posState?.pendingPayments.length ?? 0})` : ''}`],
+                ['movements', 'Movimientos'],
+              ] as const).map(([tab, label]) => (
+                <button
+                  key={tab}
+                  type="button"
+                  onClick={() => setCashierRightPanel(tab)}
+                  className={`rounded-full border px-4 py-2 text-[0.68rem] uppercase tracking-[0.22em] transition ${
+                    cashierRightPanel === tab ? 'border-cyanGlow/35 bg-cyanGlow/12 text-cyanGlow' : 'border-white/8 bg-white/[0.02] text-mist'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {cashierRightPanel === 'summary' ? (
+              <div className="space-y-5">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <SummaryPill
+                    label={posState?.activeSalesSession ? 'Jornada activa' : 'Estado de jornada'}
+                    value={posState?.activeSalesSession?.sessionLabel ?? 'Sin jornada abierta'}
+                  />
+                  <SummaryPill
+                    label="Fecha contable"
+                    value={posState?.activeSalesSession?.businessDate ?? posState?.recentSalesSessions.find((session) => session.status === 'closed')?.businessDate ?? 'Sin cierre'}
+                  />
+                  <SummaryPill label="Vendido" value={formatCurrency(activeSalesSessionSummary.grossSales)} />
+                  <SummaryPill label="Cobrado" value={formatCurrency(activeSalesSessionSummary.totalCollected)} />
+                  <SummaryPill label="Pendiente" value={formatCurrency(activeSalesSessionSummary.pendingBalance)} />
+                  <SummaryPill label="Pagos por validar" value={String(posState?.pendingPayments.length ?? 0)} />
+                  <SummaryPill label="Mesas abiertas" value={String(sessionOpenTableCount)} />
+                  <SummaryPill label="Mesas cerradas" value={String(sessionClosedTableCount)} />
+                </div>
+
+                <div className="rounded-[1.2rem] border border-white/8 bg-white/[0.02] p-4">
+                  <p className="text-[0.68rem] uppercase tracking-[0.22em] text-cyanGlow/75">Control de jornada</p>
+                  {posState?.activeSalesSession ? (
+                    <div className="mt-4 space-y-4">
+                      <Field label="Nota de cierre">
+                        <input
+                          value={salesSessionClosingNotes}
+                          onChange={(event) => setSalesSessionClosingNotes(event.target.value)}
+                          className={inputClassName}
+                          placeholder="Cierre madrugada, caja principal, observaciones..."
+                        />
+                      </Field>
+
+                      <button
+                        type="button"
+                        onClick={() => void handleCloseActiveSalesSession()}
+                        disabled={Boolean(busyAction) || activeSalesSessionSummary.pendingBalance > 0 || activeSalesSessionSummary.pendingPayments > 0}
+                        className={primaryButtonClassName}
+                      >
+                        Cerrar jornada
+                      </button>
+
+                      {activeSalesSessionSummary.pendingBalance > 0 || activeSalesSessionSummary.pendingPayments > 0 ? (
+                        <p className="text-sm text-amberGlow">
+                          Antes de cerrar debes dejar esta jornada sin saldo pendiente ni pagos por confirmar.
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <div className="mt-4 space-y-4">
+                      <Field label="Nota de apertura">
+                        <input
+                          value={salesSessionOpeningNotes}
+                          onChange={(event) => setSalesSessionOpeningNotes(event.target.value)}
+                          className={inputClassName}
+                          placeholder="Prueba turno noche, caja principal, observaciones..."
+                        />
+                      </Field>
+                      <button type="button" onClick={() => void handleOpenSalesSession()} disabled={Boolean(busyAction)} className={primaryButtonClassName}>
+                        Abrir jornada ahora
+                      </button>
+                      <p className="text-sm text-mist">Tambien puede abrirse sola cuando se mueve la operacion, pero aqui tienes control explicito para pruebas y turnos reales.</p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="rounded-[1.2rem] border border-white/8 bg-white/[0.02] p-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
-                      <p className="font-medium text-ivory">{paymentMethodLabels[payment.method]}</p>
-                      <p className="mt-2 text-sm text-mist">{formatCurrency(payment.amountApplied)}</p>
-                      {payment.reference ? <p className="mt-2 text-sm text-amberGlow">{payment.reference}</p> : null}
+                      <p className="text-[0.68rem] uppercase tracking-[0.22em] text-cyanGlow/75">Acceso rapido a jornadas previas</p>
+                      <p className="mt-2 text-sm text-mist">Cuando cierres una jornada te llevamos directo a su resumen organizado.</p>
                     </div>
-                    <div className="flex gap-2">
-                      <button type="button" onClick={() => void handleConfirmPendingPayment(payment.id)} className={primaryButtonClassName}>
-                        Confirmar
-                      </button>
-                      <button type="button" onClick={() => void handleRejectPendingPayment(payment.id)} className={dangerButtonClassName}>
-                        Rechazar
-                      </button>
-                    </div>
+                    <button type="button" onClick={() => setCashierRightPanel('previous_sessions')} className={ghostButtonClassName}>
+                      Ver jornadas previas
+                    </button>
                   </div>
-                </article>
-              ))}
-              {!posState?.pendingPayments.length ? <EmptyState message="No hay pagos pendientes en este momento." /> : null}
-            </div>
+                  {previousClosedSessions.length ? (
+                    <div className="mt-4 rounded-[1rem] border border-white/8 bg-black/15 px-3 py-3 text-sm text-mist">
+                      Ultima cerrada: <span className="text-ivory">{previousClosedSessions[0].sessionLabel}</span>
+                    </div>
+                  ) : (
+                    <div className="mt-4 rounded-[1rem] border border-white/8 bg-black/15 px-3 py-3 text-sm text-mist">
+                      Todavia no hay jornadas cerradas guardadas.
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : null}
+
+            {cashierRightPanel === 'previous_sessions' ? (
+              <div className="space-y-4">
+                <div className="space-y-3">
+                  {previousClosedSessions.map((session) => (
+                    <div key={session.id} className="space-y-3">
+                      <button
+                        ref={(node) => {
+                          historicalSessionHeaderRefs.current[session.id] = node;
+                        }}
+                        type="button"
+                        onClick={() => setSelectedHistoricalSessionId((current) => (current === session.id ? null : session.id))}
+                        className={`w-full rounded-[1.1rem] border p-4 text-left transition ${
+                          selectedHistoricalSession?.id === session.id ? 'border-cyanGlow/28 bg-cyanGlow/10' : 'border-white/8 bg-white/[0.02]'
+                        }`}
+                      >
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div>
+                            <p className="font-medium text-ivory">{session.sessionLabel}</p>
+                            <p className="mt-1 text-xs uppercase tracking-[0.18em] text-cyanGlow/75">
+                              {session.businessDate} · cerrada {session.closedAt ? formatDateTime(session.closedAt) : 'sin hora'}
+                            </p>
+                          </div>
+                          <span className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-3 py-1 text-[0.65rem] uppercase tracking-[0.22em] text-emerald-200">
+                            Cerrada
+                          </span>
+                        </div>
+                        <div className="mt-3 grid gap-2 text-sm text-mist sm:grid-cols-2">
+                          <p>Vendido: {formatCurrency(session.summary?.grossSales ?? 0)}</p>
+                          <p>Cobrado: {formatCurrency(session.summary?.totalCollected ?? 0)}</p>
+                          <p>
+                            Mesas:{' '}
+                            {selectedHistoricalSession?.id === session.id
+                              ? selectedHistoricalSessionSales.length
+                              : closedSales.filter((order) => order.salesSessionId === session.id).length}
+                          </p>
+                          <p>Productos: {session.summary?.products.reduce((sum, item) => sum + item.quantity, 0) ?? 0}</p>
+                        </div>
+                      </button>
+
+                      {selectedHistoricalSession?.id === session.id ? (
+                        <div className="space-y-4 rounded-[1.2rem] border border-white/8 bg-white/[0.02] p-4">
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            <SummaryPill label="Jornada" value={selectedHistoricalSession.sessionLabel} />
+                            <SummaryPill label="Fecha contable" value={selectedHistoricalSession.businessDate} />
+                            <SummaryPill label="Vendido" value={formatCurrency(selectedHistoricalSession.summary?.grossSales ?? 0)} />
+                            <SummaryPill label="Cobrado" value={formatCurrency(selectedHistoricalSession.summary?.totalCollected ?? 0)} />
+                            <SummaryPill label="Pendiente" value={formatCurrency(selectedHistoricalSession.summary?.pendingBalance ?? 0)} />
+                            <SummaryPill label="Mesas cerradas" value={String(selectedHistoricalSessionSales.length)} />
+                          </div>
+
+                          <div className="rounded-[1rem] border border-white/8 bg-black/15 p-4">
+                            <p className="text-[0.68rem] uppercase tracking-[0.22em] text-cyanGlow/75">Productos vendidos</p>
+                            <div className="mt-3 space-y-2">
+                              {(selectedHistoricalSession.summary?.products ?? []).slice(0, 10).map((product) => (
+                                <div key={`${product.productName}-${product.prepArea}-${product.menuItemSourceKey ?? 'sin-clave'}`} className="flex items-center justify-between gap-3 rounded-[0.9rem] border border-white/8 bg-white/[0.02] px-3 py-2 text-sm">
+                                  <div>
+                                    <p className="font-medium text-ivory">{product.productName}</p>
+                                    <p className="mt-1 text-xs uppercase tracking-[0.18em] text-mist">{product.quantity} unidad(es)</p>
+                                  </div>
+                                  <p className="text-mist">{formatCurrency(product.totalAmount)}</p>
+                                </div>
+                              ))}
+                              {!(selectedHistoricalSession.summary?.products ?? []).length ? <EmptyState message="No hay productos resumidos en esta jornada." /> : null}
+                            </div>
+                          </div>
+
+                          <div className="space-y-3">
+                            {selectedHistoricalSessionSales.map((order) => (
+                              <details key={order.id} className="rounded-[1.2rem] border border-white/8 bg-white/[0.02] p-4">
+                                <summary className="list-none cursor-pointer">
+                                  <div className="flex flex-wrap items-start justify-between gap-3">
+                                    <div>
+                                      <p className="font-medium text-ivory">{resolveOrderTableLabel(order, tablesById)}</p>
+                                      <p className="mt-1 text-xs uppercase tracking-[0.18em] text-cyanGlow/75">
+                                        Cerrada {formatDateTime(order.closedAt ?? order.updatedAt)}
+                                      </p>
+                                    </div>
+                                    <span className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-3 py-1 text-[0.65rem] uppercase tracking-[0.22em] text-emerald-200">
+                                      Pagada
+                                    </span>
+                                  </div>
+                                  <div className="mt-3 grid gap-2 text-sm text-mist">
+                                    <p>Total: {formatCurrency(order.summary.totalDue)}</p>
+                                    <p>Pagado: {formatCurrency(order.summary.totalPaid)}</p>
+                                    <p>Metodos: {formatPaymentMethodsSummary(order.payments.filter((payment) => payment.status === 'confirmed'))}</p>
+                                  </div>
+                                </summary>
+
+                                <div className="mt-4 space-y-4 border-t border-white/8 pt-4">
+                                  <div>
+                                    <p className="text-[0.68rem] uppercase tracking-[0.22em] text-cyanGlow/75">Productos</p>
+                                    <div className="mt-3 space-y-2">
+                                      {order.items
+                                        .filter((item) => item.operationalStatus !== 'cancelled')
+                                        .map((item) => (
+                                          <div key={item.id} className="rounded-[1rem] border border-white/8 bg-black/15 px-3 py-3 text-sm text-mist">
+                                            <div className="flex items-start justify-between gap-3">
+                                              <p className="font-medium text-ivory">
+                                                {item.quantity} × {item.productName}
+                                              </p>
+                                              <p>{formatCurrency(item.totalPrice)}</p>
+                                            </div>
+                                            {item.notes ? <p className="mt-2 text-sm text-cyanGlow">{item.notes}</p> : null}
+                                          </div>
+                                        ))}
+                                    </div>
+                                  </div>
+
+                                  <div>
+                                    <p className="text-[0.68rem] uppercase tracking-[0.22em] text-cyanGlow/75">Pagos registrados</p>
+                                    <div className="mt-3 space-y-2">
+                                      {order.payments.map((payment) => (
+                                        <div key={payment.id} className="rounded-[1rem] border border-white/8 bg-black/15 px-3 py-3 text-sm text-mist">
+                                          <div className="flex flex-wrap items-start justify-between gap-3">
+                                            <div>
+                                              <p className="font-medium text-ivory">{paymentMethodLabels[payment.method]}</p>
+                                              <p className="mt-1 text-xs uppercase tracking-[0.18em] text-mist">{formatDateTime(payment.confirmedAt ?? payment.createdAt)}</p>
+                                            </div>
+                                            <div className="text-right">
+                                              <p className="font-medium text-ivory">{formatCurrency(payment.amountApplied)}</p>
+                                              <p className="mt-1 text-xs uppercase tracking-[0.18em] text-mist">
+                                                {payment.status === 'confirmed' ? 'Confirmado' : payment.status === 'rejected' ? 'Rechazado' : 'Pendiente'}
+                                              </p>
+                                            </div>
+                                          </div>
+                                          {payment.reference ? <p className="mt-2 text-sm text-amberGlow">{payment.reference}</p> : null}
+                                          {payment.notes ? <p className="mt-2 text-sm text-cyanGlow">{payment.notes}</p> : null}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                </div>
+                              </details>
+                            ))}
+                            {!selectedHistoricalSessionSales.length ? <EmptyState message="Esta jornada todavia no tiene mesas cerradas asociadas." /> : null}
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  ))}
+                  {!previousClosedSessions.length ? <EmptyState message="Todavia no hay jornadas cerradas guardadas." /> : null}
+                </div>
+              </div>
+            ) : null}
+
+            {cashierRightPanel === 'validations' ? (
+              (posState?.pendingPayments ?? []).length ? (
+                <div className="space-y-3">
+                  {(posState?.pendingPayments ?? []).map((payment) => {
+                    const paymentOrder = ordersById.get(payment.orderId);
+                    return (
+                      <article
+                        key={payment.id}
+                        ref={(node) => {
+                          pendingPaymentCardRefs.current[payment.id] = node;
+                        }}
+                        tabIndex={-1}
+                        className={`rounded-[1.2rem] border p-4 ${
+                          highlightedPendingPaymentId === payment.id ? 'border-cyanGlow/35 bg-cyanGlow/10' : 'border-white/8 bg-black/15'
+                        }`}
+                      >
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div>
+                            <p className="font-medium text-ivory">{paymentMethodLabels[payment.method]}</p>
+                            <p className="mt-1 text-xs uppercase tracking-[0.18em] text-cyanGlow/75">
+                              {paymentOrder ? resolveOrderTableLabel(paymentOrder, tablesById) : 'Mesa sin contexto'}
+                            </p>
+                            <p className="mt-2 text-sm text-mist">{formatCurrency(payment.amountApplied)}</p>
+                            {payment.reference ? <p className="mt-2 text-sm text-amberGlow">{payment.reference}</p> : null}
+                            {highlightedPendingPaymentId === payment.id ? (
+                              <p className="mt-2 text-sm text-cyanGlow">Pago recien registrado. Confirma o rechaza este movimiento ahora.</p>
+                            ) : null}
+                          </div>
+                          <div className="flex gap-2">
+                            <button type="button" onClick={() => void handleConfirmPendingPayment(payment.id)} className={primaryButtonClassName}>
+                              Confirmar
+                            </button>
+                            <button type="button" onClick={() => void handleRejectPendingPayment(payment.id)} className={dangerButtonClassName}>
+                              Rechazar
+                            </button>
+                          </div>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              ) : (
+                <EmptyState message="No hay transferencias ni pagos manuales pendientes por revisar." />
+              )
+            ) : null}
+
+            {cashierRightPanel === 'movements' ? (
+              <div className="space-y-3">
+                {(posState?.logs ?? []).slice(0, 12).map((log) => (
+                  <article key={log.id} className="rounded-[1.2rem] border border-white/8 bg-white/[0.02] p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="font-medium text-ivory">{formatPosEventLabel(log.eventType)}</p>
+                        <p className="mt-1 text-xs uppercase tracking-[0.18em] text-cyanGlow/75">{formatDateTime(log.createdAt)}</p>
+                      </div>
+                      <span className="rounded-full border border-white/8 bg-black/20 px-3 py-1 text-[0.65rem] uppercase tracking-[0.22em] text-mist">
+                        {formatOperatorIdentity(log.actorEmail)}
+                      </span>
+                    </div>
+                    {resolveLogContextLabel(log, ordersById, tablesById) ? (
+                      <p className="mt-3 text-sm text-mist">{resolveLogContextLabel(log, ordersById, tablesById)}</p>
+                    ) : null}
+                    {log.notes ? <p className="mt-2 text-sm text-cyanGlow">{log.notes}</p> : null}
+                  </article>
+                ))}
+                {!(posState?.logs ?? []).length ? <EmptyState message="Todavia no hay movimientos recientes en la trazabilidad POS." /> : null}
+              </div>
+            ) : null}
           </Panel>
         </section>
       ) : null}
     </AdminLayout>
   );
+}
+
+type RealtimeSignalTarget = 'bar' | 'cashier' | 'floor' | 'kitchen';
+type RealtimeSignalTone = 'cashier' | 'prep' | 'ready';
+
+interface RealtimeSignal {
+  body: string;
+  dedupeKey: string;
+  target: RealtimeSignalTarget;
+  title: string;
+  tone: RealtimeSignalTone;
+}
+
+function resolveRealtimeSignal(event: PosRealtimeEvent, state: PosState | null, currentActorEmail: string): RealtimeSignal | null {
+  if (event.table === 'pos_order_items' && event.eventType === 'UPDATE' && event.newRecord) {
+    const newStatus = String(event.newRecord.operational_status ?? '');
+    const oldStatus = String(event.oldRecord?.operational_status ?? '');
+    const updatedByEmail = String(event.newRecord.updated_by_email ?? event.newRecord.created_by_email ?? '').trim().toLowerCase();
+
+    if (!newStatus || newStatus === oldStatus || updatedByEmail === currentActorEmail) {
+      return null;
+    }
+
+    const itemId = String(event.newRecord.id ?? '');
+    const prepArea = String(event.newRecord.prep_area ?? '');
+    const quantity = Number(event.newRecord.quantity ?? 0);
+    const productName = String(event.newRecord.product_name ?? 'Producto');
+    const tableLabel = resolveRealtimeItemTableLabel(state, itemId);
+    const itemSummary = `${quantity > 0 ? `${quantity} x ` : ''}${productName}`;
+    const suffix = tableLabel ? ` · ${tableLabel}` : '';
+
+    if (newStatus === 'pending_preparation') {
+      return {
+        body: `${itemSummary}${suffix}`,
+        dedupeKey: `item:${itemId}:pending_preparation`,
+        target: prepArea === 'kitchen' ? 'kitchen' : 'bar',
+        title: prepArea === 'kitchen' ? 'Nuevo pedido en cocina' : 'Nuevo pedido en bar',
+        tone: 'prep',
+      };
+    }
+
+    if (newStatus === 'ready') {
+      return {
+        body: `${itemSummary}${suffix}`,
+        dedupeKey: `item:${itemId}:ready`,
+        target: 'floor',
+        title: 'Producto listo para recoger',
+        tone: 'ready',
+      };
+    }
+
+    return null;
+  }
+
+  if (event.table === 'pos_payments' && event.eventType === 'INSERT' && event.newRecord) {
+    const status = String(event.newRecord.status ?? '');
+    const createdByEmail = String(event.newRecord.created_by_email ?? '').trim().toLowerCase();
+    if (status !== 'pending' || createdByEmail === currentActorEmail) {
+      return null;
+    }
+
+    const paymentId = String(event.newRecord.id ?? '');
+    const orderId = String(event.newRecord.order_id ?? '');
+    const amountApplied = Number(event.newRecord.amount_applied ?? 0);
+    const method = String(event.newRecord.method ?? 'pago');
+    const order = state?.openOrders.find((entry) => entry.id === orderId) ?? state?.closedSales.find((entry) => entry.id === orderId) ?? null;
+    const tableLabel = order ? resolveOrderTableLabel(order, new Map((state?.tables ?? []).map((table) => [table.id, table]))) : '';
+
+    return {
+      body: `${paymentMethodLabels[method as PaymentMethod] ?? method} · ${formatCurrency(amountApplied)}${tableLabel ? ` · ${tableLabel}` : ''}`,
+      dedupeKey: `payment:${paymentId}:pending`,
+      target: 'cashier',
+      title: 'Pago pendiente por validar',
+      tone: 'cashier',
+    };
+  }
+
+  return null;
+}
+
+function resolveRealtimeItemTableLabel(state: PosState | null, itemId: string) {
+  if (!state || !itemId) {
+    return '';
+  }
+
+  for (const order of [...state.openOrders, ...state.closedSales]) {
+    const item = order.items.find((entry) => entry.id === itemId);
+    if (!item) {
+      continue;
+    }
+
+    const table = state.tables.find((entry) => entry.id === order.tableId);
+    if (table) {
+      return `${table.name} · ${table.code}`;
+    }
+
+    if (item.tableName || item.tableCode) {
+      return `${item.tableName ?? 'Mesa'}${item.tableCode ? ` · ${item.tableCode}` : ''}`;
+    }
+  }
+
+  return '';
+}
+
+function triggerRealtimeAttention(
+  signal: RealtimeSignal,
+  audioContext: AudioContext | null,
+  recentKeys: Map<string, number>,
+) {
+  const now = Date.now();
+  const recentTs = recentKeys.get(signal.dedupeKey);
+  if (recentTs && now - recentTs < 1400) {
+    return;
+  }
+
+  recentKeys.set(signal.dedupeKey, now);
+  for (const [key, timestamp] of recentKeys.entries()) {
+    if (now - timestamp > 8000) {
+      recentKeys.delete(key);
+    }
+  }
+
+  playRealtimeTone(audioContext, signal.tone);
+
+  if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+    navigator.vibrate(signal.tone === 'ready' ? [160, 80, 160] : [220, 110, 220]);
+  }
+
+  if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+    try {
+      const notification = new Notification(signal.title, {
+        body: signal.body,
+        tag: signal.dedupeKey,
+      });
+      window.setTimeout(() => notification.close(), 4200);
+    } catch {
+      // noop
+    }
+  }
+}
+
+function playRealtimeTone(audioContext: AudioContext | null, tone: RealtimeSignalTone) {
+  if (!audioContext) {
+    return;
+  }
+
+  if (audioContext.state === 'suspended') {
+    void audioContext.resume().catch(() => {});
+  }
+
+  const startAt = audioContext.currentTime;
+  const frequencies =
+    tone === 'ready'
+      ? [880, 1174]
+      : tone === 'cashier'
+        ? [784, 988]
+        : [659, 880];
+
+  frequencies.forEach((frequency, index) => {
+    const oscillator = audioContext.createOscillator();
+    const gain = audioContext.createGain();
+    oscillator.type = tone === 'prep' ? 'square' : 'sine';
+    oscillator.frequency.value = frequency;
+    gain.gain.setValueAtTime(0.0001, startAt + index * 0.16);
+    gain.gain.exponentialRampToValueAtTime(0.06, startAt + index * 0.16 + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, startAt + index * 0.16 + 0.18);
+    oscillator.connect(gain);
+    gain.connect(audioContext.destination);
+    oscillator.start(startAt + index * 0.16);
+    oscillator.stop(startAt + index * 0.16 + 0.2);
+  });
 }
 
 function PreparationQueuePanel({
@@ -1907,6 +2673,7 @@ function rebuildDerivedStateFromTables(state: PosState, tables: PosTableWithOrde
   return {
     ...state,
     generatedAt: new Date().toISOString(),
+    closedSales: state.closedSales,
     openOrders,
     pendingPreparationBar,
     pendingPreparationKitchen,
@@ -2068,6 +2835,83 @@ function buildPendingPreparationListsFromTables(tables: PosTableWithOrder[]) {
   };
 }
 
+function buildLiveSalesSessionSummary(activeSession: PosSalesSession | null, orders: PosOrderWithRelations[]): PosSalesSessionSummary {
+  if (!activeSession) {
+    return {
+      confirmedPayments: 0,
+      deliveredProducts: 0,
+      grossSales: 0,
+      openOrders: 0,
+      orderCount: 0,
+      paymentMethods: [],
+      pendingBalance: 0,
+      pendingPayments: 0,
+      products: [],
+      totalCollected: 0,
+    };
+  }
+
+  const sessionOrders = orders.filter((order) => order.salesSessionId === activeSession.id);
+  const productsMap = new Map<string, PosSalesSessionSummary['products'][number]>();
+  const paymentMethodsMap = new Map<string, PosSalesSessionSummary['paymentMethods'][number]>();
+
+  for (const order of sessionOrders) {
+    for (const item of order.items) {
+      if (item.operationalStatus === 'cancelled' || item.financialStatus === 'cancelled') {
+        continue;
+      }
+
+      const key = `${item.productName}::${item.prepArea}::${item.menuItemSourceKey ?? ''}`;
+      const existing = productsMap.get(key);
+      if (existing) {
+        existing.quantity += item.quantity;
+        existing.totalAmount += item.totalPrice;
+      } else {
+        productsMap.set(key, {
+          menuItemSourceKey: item.menuItemSourceKey,
+          prepArea: item.prepArea,
+          productName: item.productName,
+          quantity: item.quantity,
+          totalAmount: item.totalPrice,
+        });
+      }
+    }
+
+    for (const payment of order.payments.filter((entry) => entry.status === 'confirmed')) {
+      const existing = paymentMethodsMap.get(payment.method);
+      if (existing) {
+        existing.paymentCount += 1;
+        existing.totalAmount += payment.amountApplied;
+      } else {
+        paymentMethodsMap.set(payment.method, {
+          method: payment.method,
+          paymentCount: 1,
+          totalAmount: payment.amountApplied,
+        });
+      }
+    }
+  }
+
+  return {
+    confirmedPayments: sessionOrders.reduce((sum, order) => sum + order.payments.filter((payment) => payment.status === 'confirmed').length, 0),
+    deliveredProducts: sessionOrders.reduce(
+      (sum, order) => sum + order.items.filter((item) => item.operationalStatus === 'delivered').reduce((acc, item) => acc + item.quantity, 0),
+      0,
+    ),
+    grossSales: sessionOrders.reduce((sum, order) => sum + order.summary.totalDue, 0),
+    openOrders: sessionOrders.filter((order) => order.closedAt == null).length,
+    orderCount: sessionOrders.length,
+    paymentMethods: Array.from(paymentMethodsMap.values()).sort((left, right) => right.totalAmount - left.totalAmount),
+    pendingBalance: sessionOrders.reduce((sum, order) => sum + order.summary.remainingBalance, 0),
+    pendingPayments: sessionOrders.reduce((sum, order) => sum + order.summary.pendingPayments, 0),
+    products: Array.from(productsMap.values()).sort((left, right) => right.quantity - left.quantity || right.totalAmount - left.totalAmount),
+    totalCollected: sessionOrders.reduce(
+      (sum, order) => sum + order.payments.filter((payment) => payment.status === 'confirmed').reduce((acc, payment) => acc + payment.amountApplied, 0),
+      0,
+    ),
+  };
+}
+
 function formatCurrency(value: number) {
   return new Intl.NumberFormat('es-CO', {
     currency: 'COP',
@@ -2089,6 +2933,95 @@ function formatOperatorIdentity(email: string | null | undefined) {
     .filter(Boolean)
     .map((chunk) => chunk.charAt(0).toUpperCase() + chunk.slice(1))
     .join(' ');
+}
+
+function resolveOrderTableLabel(order: PosOrderWithRelations, tablesById: Map<string, PosTableWithOrder>) {
+  const table = tablesById.get(order.tableId);
+  if (!table) {
+    return 'Mesa sin referencia';
+  }
+
+  return `${table.name} · ${table.code}`;
+}
+
+function formatDateTime(value: string) {
+  return new Intl.DateTimeFormat('es-CO', {
+    day: '2-digit',
+    hour: 'numeric',
+    minute: '2-digit',
+    month: '2-digit',
+  }).format(new Date(value));
+}
+
+function formatPaymentMethodsSummary(entries: PosPayment[] | PosSalesSessionSummary['paymentMethods']) {
+  if (!entries.length) {
+    return 'Sin pagos confirmados';
+  }
+
+  if (isPosPaymentArray(entries)) {
+    const grouped = new Map<PaymentMethod, number>();
+    for (const payment of entries) {
+      if (payment.status !== 'confirmed') {
+        continue;
+      }
+      grouped.set(payment.method, (grouped.get(payment.method) ?? 0) + payment.amountApplied);
+    }
+
+    return Array.from(grouped.entries())
+      .sort((left, right) => right[1] - left[1])
+      .map(([method, total]) => `${paymentMethodLabels[method]} ${formatCurrency(total)}`)
+      .join(' · ');
+  }
+
+  return entries.map((entry) => `${paymentMethodLabels[entry.method]} ${formatCurrency(entry.totalAmount)}`).join(' · ');
+}
+
+function isPosPaymentArray(entries: PosPayment[] | PosSalesSessionSummary['paymentMethods']): entries is PosPayment[] {
+  return entries.length > 0 && 'status' in entries[0];
+}
+
+function formatPosEventLabel(eventType: string) {
+  const labels: Record<string, string> = {
+    items_added: 'Productos agregados',
+    item_cancelled: 'Producto cancelado',
+    item_delivered: 'Producto entregado',
+    item_marked_in_process: 'Producto en proceso',
+    item_marked_picking_up: 'Producto en recogida',
+    item_marked_ready: 'Producto listo',
+    item_payment_status_updated: 'Estado de pago actualizado',
+    item_replaced: 'Producto reemplazado',
+    item_updated: 'Producto actualizado',
+    order_reconciled: 'Cuenta reconciliada',
+    payment_recorded: 'Pago registrado',
+    sales_session_closed: 'Jornada cerrada',
+    sales_session_opened: 'Jornada abierta',
+    table_created: 'Mesa creada',
+    table_deleted: 'Mesa eliminada',
+  };
+
+  return labels[eventType] ?? eventType.replace(/_/g, ' ');
+}
+
+function resolveLogContextLabel(
+  log: PosState['logs'][number],
+  ordersById: Map<string, PosOrderWithRelations>,
+  tablesById: Map<string, PosTableWithOrder>,
+) {
+  if (log.orderId) {
+    const order = ordersById.get(log.orderId);
+    if (order) {
+      return resolveOrderTableLabel(order, tablesById);
+    }
+  }
+
+  if (log.tableId) {
+    const table = tablesById.get(log.tableId);
+    if (table) {
+      return `${table.name} · ${table.code}`;
+    }
+  }
+
+  return null;
 }
 
 function resolveReplacementAnchorTimestamp(item: PosOrderItem, itemsById: Map<string, PosOrderItem>) {
@@ -2185,3 +3118,4 @@ const dangerButtonClassName =
 function getQuantityInputClassName(isValid: boolean) {
   return isValid ? inputClassName : invalidInputClassName;
 }
+

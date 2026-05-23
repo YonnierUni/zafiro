@@ -291,27 +291,23 @@ function ToggleCard({ changed, checked, description, label, onChange }: ToggleCa
       }`}
     >
       <div className="flex min-w-0 flex-col items-start gap-3">
-        <div className="flex min-w-0 w-full flex-wrap items-start justify-between gap-x-3 gap-y-2">
-          <p className="min-w-0 flex-1 text-balance pr-2 font-semibold leading-6 text-ivory">{label}</p>
-          <div className="flex max-w-full shrink-0 flex-wrap items-center justify-end gap-2 self-start">
-            {changed ? (
-              <span className="rounded-full border border-amberGlow/20 bg-amberGlow/10 px-2 py-1 text-[0.58rem] font-semibold uppercase tracking-[0.18em] text-amberGlow">
-                Mod.
-              </span>
-            ) : null}
-            <span
-              className={`inline-flex min-w-[3.25rem] items-center justify-center rounded-full px-2.5 py-1 text-[0.58rem] font-semibold uppercase tracking-[0.16em] ${
-                checked ? 'bg-emerald-300/15 text-emerald-200' : 'bg-white/[0.05] text-mist'
-              }`}
-            >
-              {checked ? 'Si' : 'No'}
+        <p className="min-w-0 text-balance font-semibold leading-6 text-ivory">{label}</p>
+        <div className="flex max-w-full flex-wrap items-center gap-2">
+          <span
+            className={`inline-flex min-w-[3.25rem] items-center justify-center rounded-full px-2.5 py-1 text-[0.58rem] font-semibold uppercase tracking-[0.16em] ${
+              checked ? 'bg-emerald-300/15 text-emerald-200' : 'bg-white/[0.05] text-mist'
+            }`}
+          >
+            {checked ? 'Si' : 'No'}
+          </span>
+          {changed ? (
+            <span className="rounded-full border border-amberGlow/20 bg-amberGlow/10 px-2 py-1 text-[0.58rem] font-semibold uppercase tracking-[0.18em] text-amberGlow">
+              Mod.
             </span>
-          </div>
+          ) : null}
         </div>
-        
-        
+        <p className="text-sm leading-6 text-mist">{description}</p>
       </div>
-      <p className="text-sm leading-6 text-mist">{description}</p>
     </button>
   );
 }

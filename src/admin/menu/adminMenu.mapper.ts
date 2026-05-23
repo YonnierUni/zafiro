@@ -333,7 +333,7 @@ export function buildAdminMenuSnapshotSummary(
 
 export function parseAdminMenuSnapshot(value: unknown): AdminMenuSnapshot {
   if (!isRecord(value)) {
-    throw new Error('El archivo no contiene un objeto JSON vÃ¡lido.');
+    throw new Error('El archivo no contiene un objeto JSON válido.');
   }
 
   if (value.kind !== 'zafiro-admin-menu-snapshot') {
@@ -341,11 +341,11 @@ export function parseAdminMenuSnapshot(value: unknown): AdminMenuSnapshot {
   }
 
   if (value.version !== 1 && value.version !== 2) {
-    throw new Error('La versiÃ³n del snapshot no es compatible.');
+    throw new Error('La versión del snapshot no es compatible.');
   }
 
   if (typeof value.generatedAt !== 'string' || !value.generatedAt.trim()) {
-    throw new Error('El snapshot no incluye una fecha de generaciÃ³n vÃ¡lida.');
+    throw new Error('El snapshot no incluye una fecha de generación válida.');
   }
 
   if (!isSnapshotFilters(value.filters)) {
@@ -353,7 +353,7 @@ export function parseAdminMenuSnapshot(value: unknown): AdminMenuSnapshot {
   }
 
   if (!isSnapshotSummary(value.summary)) {
-    throw new Error('El snapshot no incluye un resumen vÃ¡lido.');
+    throw new Error('El snapshot no incluye un resumen válido.');
   }
 
   if (!Array.isArray(value.changedItems) || !value.changedItems.every(isSerializedMenuItem)) {
@@ -368,7 +368,7 @@ export function parseAdminMenuSnapshot(value: unknown): AdminMenuSnapshot {
   }
 
   if (value.selectedDraftKey !== null && typeof value.selectedDraftKey !== 'string') {
-    throw new Error('La selecciÃ³n activa del snapshot no tiene un formato vÃ¡lido.');
+    throw new Error('La selección activa del snapshot no tiene un formato válido.');
   }
 
   return value as unknown as AdminMenuSnapshot;

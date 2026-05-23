@@ -1,4 +1,4 @@
-import type { RealtimeChannel } from '@supabase/supabase-js';
+import type { RealtimeChannel, RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 import type {
   AddOrderItemInput,
   CreatePosTableInput,
@@ -14,6 +14,8 @@ import type {
   PosOrderWithRelations,
   PosPayment,
   PosProductOption,
+  PosSalesSession,
+  PosSalesSessionSummary,
   PosState,
   PosTable,
   PosTableWithOrder,
@@ -31,6 +33,7 @@ type PosTableRow = Database['public']['Tables']['pos_tables']['Row'];
 type PosOrderRow = Database['public']['Tables']['pos_orders']['Row'];
 type PosOrderItemRow = Database['public']['Tables']['pos_order_items']['Row'];
 type PosPaymentRow = Database['public']['Tables']['pos_payments']['Row'];
+type PosSalesSessionRow = Database['public']['Tables']['pos_sales_sessions']['Row'];
 type PosLogRow = Database['public']['Tables']['pos_order_status_logs']['Row'];
 type StaffProfileRow = Database['public']['Tables']['staff_profiles']['Row'];
 
@@ -54,15 +57,32 @@ const DRAFT_EDITABLE_STATUSES = new Set<OrderOperationalStatus>(['draft']);
 const CONTROLLED_CANCEL_STATUSES = new Set<OrderOperationalStatus>(['draft', 'sent', 'pending_preparation']);
 const KITCHEN_PRODUCT_TYPES = new Set(['comida']);
 const BAR_PRODUCT_TYPES = new Set(['cocteles', 'micheladas', 'jugos-y-limonadas', 'bebidas']);
+const SALES_SESSION_CUTOFF_HOUR = 18;
+
+type PosRealtimeTable =
+  | 'pos_tables'
+  | 'pos_orders'
+  | 'pos_order_items'
+  | 'pos_payments'
+  | 'pos_sales_sessions'
+  | 'pos_order_status_logs';
+
+export interface PosRealtimeEvent {
+  eventType: 'INSERT' | 'UPDATE' | 'DELETE';
+  newRecord: Record<string, unknown> | null;
+  oldRecord: Record<string, unknown> | null;
+  table: PosRealtimeTable;
+}
 
 export async function loadPosStateFromSupabase(): Promise<PosState> {
   const supabase = getSupabaseClient();
-  const [tables, orders, items, payments, logs] = await Promise.all([
+  const [tables, orders, items, payments, logs, salesSessions] = await Promise.all([
     supabase.from('pos_tables').select('*').order('code', { ascending: true }),
     supabase.from('pos_orders').select('*').order('opened_at', { ascending: false }),
     supabase.from('pos_order_items').select('*').order('created_at', { ascending: true }),
     supabase.from('pos_payments').select('*').order('created_at', { ascending: true }),
     supabase.from('pos_order_status_logs').select('*').order('created_at', { ascending: false }).limit(120),
+    supabase.from('pos_sales_sessions').select('*').order('opened_at', { ascending: false }).limit(10),
   ]);
 
   throwIfError(tables.error, 'No fue posible leer las mesas POS');
@@ -70,6 +90,7 @@ export async function loadPosStateFromSupabase(): Promise<PosState> {
   throwIfError(items.error, 'No fue posible leer las lineas POS');
   throwIfError(payments.error, 'No fue posible leer los pagos POS');
   throwIfError(logs.error, 'No fue posible leer la trazabilidad POS');
+  throwIfError(salesSessions.error, 'No fue posible leer las jornadas POS');
 
   const ordersWithRelations = buildOrdersWithRelations(orders.data ?? [], items.data ?? [], payments.data ?? []);
   const tablesWithOrders = buildTablesWithOrders(tables.data ?? [], ordersWithRelations);
@@ -91,17 +112,71 @@ export async function loadPosStateFromSupabase(): Promise<PosState> {
     .filter((item) => !TERMINAL_ITEM_STATUSES.has(item.operationalStatus) && item.operationalStatus !== 'draft')
     .sort((left, right) => resolvePreparationQueueTimestamp(left).localeCompare(resolvePreparationQueueTimestamp(right)));
 
+  const mappedPayments = (payments.data ?? []).map(mapPosPaymentRow);
+  const mappedSalesSessions = (salesSessions.data ?? []).map((row) => {
+    const mappedSession = mapPosSalesSessionRow(row);
+    const sessionOrders = ordersWithRelations.filter((order) => order.salesSessionId === mappedSession.id);
+    const sessionPayments = mappedPayments.filter((payment) => payment.salesSessionId === mappedSession.id);
+    const liveSummary = buildSalesSessionSummary(sessionOrders, sessionPayments);
+
+    return {
+      ...mappedSession,
+      summary: sessionOrders.length || sessionPayments.length ? liveSummary : mappedSession.summary,
+    };
+  });
+  const activeSalesSession = mappedSalesSessions.find((session) => session.status === 'open') ?? null;
+
   return {
     generatedAt: new Date().toISOString(),
     roles: [],
     staffProfile: null,
+    activeSalesSession,
+    recentSalesSessions: mappedSalesSessions,
     tables: tablesWithOrders,
     openOrders: ordersWithRelations.filter((order) => order.closedAt == null),
+    closedSales: ordersWithRelations
+      .filter((order) => order.closedAt != null)
+      .sort((left, right) => (right.closedAt ?? right.updatedAt).localeCompare(left.closedAt ?? left.updatedAt)),
     pendingPreparationKitchen: pendingPreparationItems.filter((item) => item.prepArea === 'kitchen'),
     pendingPreparationBar: pendingPreparationItems.filter((item) => item.prepArea === 'bar'),
-    pendingPayments: (payments.data ?? []).map(mapPosPaymentRow).filter((payment) => payment.status === 'pending'),
+    pendingPayments: mappedPayments.filter((payment) => payment.status === 'pending'),
     logs: (logs.data ?? []).map(mapPosLogRow),
   };
+}
+
+export async function openSalesSessionInSupabase(actor: PosActorContext, notes?: string) {
+  const currentOpenSession = await getOpenSalesSession();
+  if (currentOpenSession) {
+    return currentOpenSession;
+  }
+
+  const openedAt = new Date().toISOString();
+  const businessDate = deriveSalesBusinessDate(openedAt, SALES_SESSION_CUTOFF_HOUR);
+  const sessionLabel = `Jornada ${businessDate}`;
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from('pos_sales_sessions')
+    .insert({
+      business_date: businessDate,
+      cutoff_hour: SALES_SESSION_CUTOFF_HOUR,
+      notes: notes?.trim() ?? '',
+      opened_at: openedAt,
+      opened_by_email: actor.email,
+      session_label: sessionLabel,
+      status: 'open',
+      summary: {} as never,
+    } as never)
+    .select('*')
+    .single();
+
+  throwIfError(error, 'No fue posible abrir una jornada de ventas');
+  await insertPosLog({
+    actor,
+    afterData: data,
+    eventType: 'sales_session_opened',
+    notes: `Jornada abierta: ${sessionLabel}`,
+  });
+  return mapPosSalesSessionRow(data);
 }
 
 export async function loadPosProductOptionsFromSupabase() {
@@ -549,6 +624,9 @@ export async function recordPosPaymentInSupabase(orderId: string, input: RecordP
   const orderBundle = await loadOrderBundle(orderId);
   const summary = buildOrderSummary(orderBundle.items, orderBundle.payments);
   const amountApplied = resolvePaymentAmount(input, orderBundle.items, summary.remainingBalance);
+  const salesSession = orderBundle.order.salesSessionId
+    ? await getSalesSessionById(orderBundle.order.salesSessionId)
+    : await ensureOpenSalesSession(actor);
 
   if (amountApplied <= 0) {
     throw new Error('El pago debe aplicar un valor mayor que cero.');
@@ -566,6 +644,21 @@ export async function recordPosPaymentInSupabase(orderId: string, input: RecordP
   const now = new Date().toISOString();
   const supabase = getSupabaseClient();
 
+  if (status === 'pending' && orderBundle.payments.some((payment) => payment.status === 'pending')) {
+    throw new Error('Esta cuenta ya tiene un pago pendiente por validar. Confirma o rechaza ese movimiento antes de registrar otro.');
+  }
+
+  if (orderBundle.order.salesSessionId !== salesSession.id) {
+    const { error: attachSessionError } = await supabase
+      .from('pos_orders')
+      .update({
+        sales_session_id: salesSession.id,
+      } as never)
+      .eq('id', orderId);
+
+    throwIfError(attachSessionError, 'No fue posible asociar esta cuenta a la jornada activa');
+  }
+
   const { data, error } = await supabase
     .from('pos_payments')
     .insert({
@@ -581,6 +674,7 @@ export async function recordPosPaymentInSupabase(orderId: string, input: RecordP
       order_id: orderId,
       percentage_applied: input.percentage ?? null,
       reference: input.reference?.trim() ?? null,
+      sales_session_id: salesSession.id,
       status,
       target_item_ids: (input.targetItemIds ?? []) as never,
     } as never)
@@ -599,6 +693,97 @@ export async function recordPosPaymentInSupabase(orderId: string, input: RecordP
   });
 
   return mapPosPaymentRow(data);
+}
+
+export async function closeActiveSalesSessionInSupabase(actor: PosActorContext, notes?: string) {
+  const supabase = getSupabaseClient();
+  const session = await getOpenSalesSession();
+
+  if (!session) {
+    throw new Error('No hay una jornada activa para cerrar en este momento.');
+  }
+
+  const sessionPayments = await loadPaymentsBySalesSessionId(session.id);
+  const directSessionOrders = await loadOrdersForSalesSession(session.id);
+  const paymentLinkedOrderIds = Array.from(new Set(sessionPayments.map((payment) => payment.orderId)));
+  const missingOrderIds = paymentLinkedOrderIds.filter((orderId) => !directSessionOrders.some((order) => order.id === orderId));
+  const inferredOrders = missingOrderIds.length ? await loadOrdersByIds(missingOrderIds) : [];
+  const sessionOrders = dedupeOrdersById([...directSessionOrders, ...inferredOrders]).sort((left, right) => left.openedAt.localeCompare(right.openedAt));
+  const sessionOrderIds = sessionOrders.map((order) => order.id);
+  const sessionItems = sessionOrderIds.length ? await loadOrderItemsByOrderIds(sessionOrderIds) : [];
+  const itemsByOrderId = new Map<string, PosOrderItem[]>();
+  const paymentsByOrderId = new Map<string, PosPayment[]>();
+
+  for (const item of sessionItems) {
+    const bucket = itemsByOrderId.get(item.orderId) ?? [];
+    bucket.push(item);
+    itemsByOrderId.set(item.orderId, bucket);
+  }
+
+  for (const payment of sessionPayments) {
+    const bucket = paymentsByOrderId.get(payment.orderId) ?? [];
+    bucket.push(payment);
+    paymentsByOrderId.set(payment.orderId, bucket);
+  }
+
+  const ordersWithRelations = sessionOrders.map((order) => {
+    const orderItems = itemsByOrderId.get(order.id) ?? [];
+    const orderPayments = paymentsByOrderId.get(order.id) ?? [];
+    return {
+      ...order,
+      items: orderItems,
+      payments: orderPayments,
+      summary: buildOrderSummary(orderItems, orderPayments),
+    };
+  });
+
+  const ordersWithBalance = ordersWithRelations.filter(
+    (order) => order.summary.remainingBalance > 0 || order.summary.pendingPayments > 0,
+  );
+
+  if (ordersWithBalance.length) {
+    throw new Error('No puedes cerrar la jornada mientras sigan cuentas abiertas, saldos pendientes o pagos por confirmar.');
+  }
+
+  const orderIdsMissingSession = sessionOrders.filter((order) => order.salesSessionId !== session.id).map((order) => order.id);
+  if (orderIdsMissingSession.length) {
+    const { error: attachOrdersError } = await supabase
+      .from('pos_orders')
+      .update({
+        sales_session_id: session.id,
+      } as never)
+      .in('id', orderIdsMissingSession);
+
+    throwIfError(attachOrdersError, 'No fue posible terminar de vincular las cuentas a la jornada antes del cierre');
+  }
+
+  const summary = buildSalesSessionSummary(ordersWithRelations, sessionPayments);
+  const now = new Date().toISOString();
+  const { data, error } = await supabase
+    .from('pos_sales_sessions')
+    .update({
+      closed_at: now,
+      closed_by_email: actor.email,
+      notes: notes?.trim() ?? session.notes,
+      status: 'closed',
+      summary: summary as never,
+    } as never)
+    .eq('id', session.id)
+    .eq('status', 'open')
+    .select('*')
+    .single();
+
+  throwIfError(error, 'No fue posible cerrar la jornada de ventas');
+
+  await insertPosLog({
+    actor,
+    afterData: data,
+    beforeData: session,
+    eventType: 'sales_session_closed',
+    notes: `Jornada cerrada: ${session.sessionLabel}`,
+  });
+
+  return mapPosSalesSessionRow(data);
 }
 
 export async function updatePosPaymentStatusInSupabase(
@@ -654,16 +839,28 @@ export async function updatePosPaymentStatusInSupabase(
   return mapPosPaymentRow(data);
 }
 
-export function subscribeToPosRealtime(onChange: () => void) {
+export function subscribeToPosRealtime(onChange: () => void, onEvent?: (event: PosRealtimeEvent) => void) {
   const supabase = getSupabaseClient();
   const channel: RealtimeChannel = supabase.channel('zafiro-pos-live');
+  const buildHandler =
+    (table: PosRealtimeTable) =>
+    (payload: RealtimePostgresChangesPayload<Record<string, unknown>>) => {
+      onEvent?.({
+        eventType: payload.eventType,
+        newRecord: payload.new ?? null,
+        oldRecord: payload.old ?? null,
+        table,
+      });
+      onChange();
+    };
 
   channel
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'pos_tables' }, onChange)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'pos_orders' }, onChange)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'pos_order_items' }, onChange)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'pos_payments' }, onChange)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'pos_order_status_logs' }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'pos_tables' }, buildHandler('pos_tables'))
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'pos_orders' }, buildHandler('pos_orders'))
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'pos_order_items' }, buildHandler('pos_order_items'))
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'pos_payments' }, buildHandler('pos_payments'))
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'pos_sales_sessions' }, buildHandler('pos_sales_sessions'))
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'pos_order_status_logs' }, buildHandler('pos_order_status_logs'))
     .subscribe();
 
   return () => {
@@ -699,10 +896,28 @@ async function loadCurrentStaffRoles() {
 
 async function ensureOpenOrderForTable(table: PosTable, actor: PosActorContext) {
   if (table.activeOrderId) {
-    return getOrderById(table.activeOrderId);
+    const existingOrder = await getOrderById(table.activeOrderId);
+    if (existingOrder.salesSessionId) {
+      return existingOrder;
+    }
+
+    const salesSession = await ensureOpenSalesSession(actor);
+    const supabase = getSupabaseClient();
+    const { data, error } = await supabase
+      .from('pos_orders')
+      .update({
+        sales_session_id: salesSession.id,
+      } as never)
+      .eq('id', table.activeOrderId)
+      .select('*')
+      .single();
+
+    throwIfError(error, 'No fue posible vincular la cuenta existente a la jornada activa');
+    return mapPosOrderRow(data);
   }
 
   const supabase = getSupabaseClient();
+  const salesSession = await ensureOpenSalesSession(actor);
   const { data, error } = await supabase
     .from('pos_orders')
     .insert({
@@ -710,6 +925,7 @@ async function ensureOpenOrderForTable(table: PosTable, actor: PosActorContext) 
       financial_status: 'pending_payment',
       notes: '',
       opened_by_email: actor.email,
+      sales_session_id: salesSession.id,
       table_id: table.id,
     } as never)
     .select('*')
@@ -843,11 +1059,30 @@ function buildOrdersWithRelations(
 
     return {
       ...order,
+      salesSessionId: order.salesSessionId ?? inferOrderSalesSessionId(orderPayments),
       items: orderItems,
       payments: orderPayments,
       summary: buildOrderSummary(orderItems, orderPayments),
     };
   });
+}
+
+function inferOrderSalesSessionId(payments: PosPayment[]) {
+  const grouped = new Map<string, number>();
+
+  for (const payment of payments) {
+    if (!payment.salesSessionId) {
+      continue;
+    }
+
+    grouped.set(payment.salesSessionId, (grouped.get(payment.salesSessionId) ?? 0) + 1);
+  }
+
+  return Array.from(grouped.entries()).sort((left, right) => right[1] - left[1])[0]?.[0] ?? null;
+}
+
+function dedupeOrdersById(orders: PosOrder[]) {
+  return Array.from(new Map(orders.map((order) => [order.id, order])).values());
 }
 
 function buildTablesWithOrders(tables: PosTableRow[], orders: PosOrderWithRelations[]): PosTableWithOrder[] {
@@ -1068,6 +1303,67 @@ async function loadOrderPayments(orderId: string) {
   return (data ?? []).map(mapPosPaymentRow);
 }
 
+async function loadOrderItemsByOrderIds(orderIds: string[]) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.from('pos_order_items').select('*').in('order_id', orderIds).order('created_at', { ascending: true });
+  throwIfError(error, 'No fue posible leer los productos de la jornada');
+  return (data ?? []).map(mapPosOrderItemRow);
+}
+
+async function loadPaymentsBySalesSessionId(salesSessionId: string) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.from('pos_payments').select('*').eq('sales_session_id', salesSessionId).order('created_at', { ascending: true });
+  throwIfError(error, 'No fue posible leer los pagos de la jornada');
+  return (data ?? []).map(mapPosPaymentRow);
+}
+
+async function loadOrdersForSalesSession(salesSessionId: string) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.from('pos_orders').select('*').eq('sales_session_id', salesSessionId).order('opened_at', { ascending: true });
+  throwIfError(error, 'No fue posible leer las ordenes de la jornada');
+  return (data ?? []).map(mapPosOrderRow);
+}
+
+async function loadOrdersByIds(orderIds: string[]) {
+  if (!orderIds.length) {
+    return [] as PosOrder[];
+  }
+
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.from('pos_orders').select('*').in('id', orderIds).order('opened_at', { ascending: true });
+  throwIfError(error, 'No fue posible completar las cuentas asociadas a la jornada');
+  return (data ?? []).map(mapPosOrderRow);
+}
+
+async function getSalesSessionById(salesSessionId: string) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.from('pos_sales_sessions').select('*').eq('id', salesSessionId).single();
+  throwIfError(error, 'No fue posible leer la jornada de ventas');
+  return mapPosSalesSessionRow(data);
+}
+
+async function getOpenSalesSession() {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from('pos_sales_sessions')
+    .select('*')
+    .eq('status', 'open')
+    .order('opened_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  throwIfError(error, 'No fue posible leer la jornada activa');
+  return data ? mapPosSalesSessionRow(data) : null;
+}
+
+async function ensureOpenSalesSession(actor: PosActorContext) {
+  const currentOpenSession = await getOpenSalesSession();
+  if (currentOpenSession) {
+    return currentOpenSession;
+  }
+  return openSalesSessionInSupabase(actor);
+}
+
 async function insertPosLog(input: {
   actor: PosActorContext;
   afterData?: unknown;
@@ -1166,8 +1462,75 @@ function mapPosOrderRow(row: PosOrderRow): PosOrder {
     notes: row.notes,
     openedAt: row.opened_at,
     openedByEmail: row.opened_by_email,
+    salesSessionId: row.sales_session_id,
     tableId: row.table_id,
     updatedAt: row.updated_at,
+  };
+}
+
+function buildSalesSessionSummary(orders: PosOrderWithRelations[], payments: PosPayment[]): PosSalesSessionSummary {
+  const activeOrders = orders.filter((order) => order.financialStatus !== 'cancelled' || order.items.some((item) => item.operationalStatus !== 'cancelled'));
+  const productsByName = new Map<string, PosSalesSessionSummary['products'][number]>();
+
+  for (const order of orders) {
+    for (const item of order.items) {
+      if (item.operationalStatus === 'cancelled' || item.financialStatus === 'cancelled') {
+        continue;
+      }
+
+      const key = `${item.productName}::${item.prepArea}::${item.menuItemSourceKey ?? ''}`;
+      const existing = productsByName.get(key);
+      if (existing) {
+        existing.quantity += item.quantity;
+        existing.totalAmount += item.totalPrice;
+      } else {
+        productsByName.set(key, {
+          menuItemSourceKey: item.menuItemSourceKey,
+          prepArea: item.prepArea,
+          productName: item.productName,
+          quantity: item.quantity,
+          totalAmount: item.totalPrice,
+        });
+      }
+    }
+  }
+
+  const confirmedPayments = payments.filter((payment) => payment.status === 'confirmed');
+  const paymentMethodMap = new Map<string, PosSalesSessionSummary['paymentMethods'][number]>();
+  for (const payment of confirmedPayments) {
+    const existing = paymentMethodMap.get(payment.method);
+    if (existing) {
+      existing.paymentCount += 1;
+      existing.totalAmount += payment.amountApplied;
+    } else {
+      paymentMethodMap.set(payment.method, {
+        method: payment.method,
+        paymentCount: 1,
+        totalAmount: payment.amountApplied,
+      });
+    }
+  }
+
+  const grossSales = orders.reduce((sum, order) => sum + order.summary.totalDue, 0);
+  const totalCollected = confirmedPayments.reduce((sum, payment) => sum + payment.amountApplied, 0);
+  const pendingBalance = orders.reduce((sum, order) => sum + order.summary.remainingBalance, 0);
+  const pendingPayments = payments.filter((payment) => payment.status === 'pending').length;
+  const deliveredProducts = orders.reduce(
+    (sum, order) => sum + order.items.filter((item) => item.operationalStatus === 'delivered').reduce((itemSum, item) => itemSum + item.quantity, 0),
+    0,
+  );
+
+  return {
+    confirmedPayments: confirmedPayments.length,
+    deliveredProducts,
+    grossSales,
+    openOrders: orders.filter((order) => order.closedAt == null).length,
+    orderCount: activeOrders.length,
+    paymentMethods: Array.from(paymentMethodMap.values()).sort((left, right) => right.totalAmount - left.totalAmount),
+    pendingBalance,
+    pendingPayments,
+    products: Array.from(productsByName.values()).sort((left, right) => right.quantity - left.quantity || right.totalAmount - left.totalAmount),
+    totalCollected,
   };
 }
 
@@ -1223,8 +1586,27 @@ function mapPosPaymentRow(row: PosPaymentRow): PosPayment {
     rejectedAt: row.rejected_at,
     rejectedByEmail: row.rejected_by_email,
     rejectionReason: row.rejection_reason,
+    salesSessionId: row.sales_session_id,
     status: row.status as PaymentStatus,
     targetItemIds: Array.isArray(row.target_item_ids) ? row.target_item_ids.filter((entry): entry is string => typeof entry === 'string') : [],
+  };
+}
+
+function mapPosSalesSessionRow(row: PosSalesSessionRow): PosSalesSession {
+  return {
+    businessDate: row.business_date,
+    closedAt: row.closed_at,
+    closedByEmail: row.closed_by_email,
+    createdAt: row.created_at,
+    cutoffHour: row.cutoff_hour,
+    id: row.id,
+    notes: row.notes,
+    openedAt: row.opened_at,
+    openedByEmail: row.opened_by_email,
+    sessionLabel: row.session_label,
+    status: row.status as PosSalesSession['status'],
+    summary: parseSalesSessionSummary(row.summary),
+    updatedAt: row.updated_at,
   };
 }
 
@@ -1250,6 +1632,38 @@ function normalizeMoney(value: number | undefined) {
   }
 
   return Math.max(Math.round(value), 0);
+}
+
+function parseSalesSessionSummary(value: Record<string, unknown> | null): PosSalesSessionSummary | null {
+  if (!value || Object.keys(value).length === 0) {
+    return null;
+  }
+
+  return value as unknown as PosSalesSessionSummary;
+}
+
+function deriveSalesBusinessDate(isoDateTime: string, cutoffHour: number) {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    day: '2-digit',
+    hour: '2-digit',
+    hour12: false,
+    month: '2-digit',
+    timeZone: 'America/Bogota',
+    year: 'numeric',
+  });
+  const parts = formatter.formatToParts(new Date(isoDateTime));
+  const pick = (type: string) => parts.find((entry) => entry.type === type)?.value ?? '00';
+  const year = Number(pick('year'));
+  const month = Number(pick('month'));
+  const day = Number(pick('day'));
+  const hour = Number(pick('hour'));
+
+  const localDate = new Date(Date.UTC(year, month - 1, day));
+  if (hour < cutoffHour) {
+    localDate.setUTCDate(localDate.getUTCDate() - 1);
+  }
+
+  return localDate.toISOString().slice(0, 10);
 }
 
 function throwIfError(error: { message: string } | null, fallbackMessage: string): asserts error is null {

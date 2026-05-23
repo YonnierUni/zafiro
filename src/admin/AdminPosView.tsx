@@ -173,8 +173,10 @@ export function AdminPosView() {
   const loadStateRef = useRef<(initial?: boolean) => Promise<void>>(async () => {});
   const historicalSessionHeaderRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const cashierPaymentPanelRef = useRef<HTMLDivElement | null>(null);
+  const floorWorkspacePanelRef = useRef<HTMLDivElement | null>(null);
   const pendingPaymentCardRefs = useRef<Record<string, HTMLElement | null>>({});
   const shouldFocusCashierPaymentPanelRef = useRef(false);
+  const shouldFocusFloorWorkspacePanelRef = useRef(false);
   const posStateRef = useRef<PosState | null>(null);
   const activeTabRef = useRef<WorkspaceTab>('floor');
   const actorRef = useRef(actor);
@@ -287,6 +289,8 @@ export function AdminPosView() {
     let isMounted = true;
 
     const handleRealtimeEvent = (event: PosRealtimeEvent) => {
+      setPosState((current) => (current ? applyRealtimeEventToPosState(current, event) : current));
+
       const realtimeSignal = resolveRealtimeSignal(event, posStateRef.current, actorRef.current.email);
       if (!realtimeSignal) {
         return;
@@ -390,6 +394,31 @@ export function AdminPosView() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!workspaceTabs.includes(activeTab)) {
+      return;
+    }
+
+    const intervalMs = getPosFallbackSyncInterval(activeTab);
+    if (intervalMs <= 0) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState !== 'visible') {
+        return;
+      }
+
+      if (shouldSuppressBackgroundSync()) {
+        return;
+      }
+
+      void loadStateRef.current(false);
+    }, intervalMs);
+
+    return () => window.clearInterval(intervalId);
+  }, [activeTab, workspaceTabs]);
+
   const selectedTable = useMemo(
     () => posState?.tables.find((table) => table.id === selectedTableId) ?? posState?.tables[0] ?? null,
     [posState?.tables, selectedTableId],
@@ -428,18 +457,34 @@ export function AdminPosView() {
   const isEditingQuantityValid = parsedEditingQuantity != null && parsedEditingQuantity > 0;
   const parsedCapacity = createTableForm.capacity ?? null;
   const isCapacityValid = parsedCapacity == null || parsedCapacity > 0;
-  const outstandingByItem = useMemo(() => buildOutstandingByItem(selectedOrder), [selectedOrder]);
-  const selectablePaymentUnits = useMemo(() => buildSelectablePaymentUnits(selectedOrder, outstandingByItem), [selectedOrder, outstandingByItem]);
+  const closedSales = posState?.closedSales ?? [];
+  const cashierTables = useMemo(
+    () =>
+      (posState?.tables ?? []).filter(
+        (table) => table.activeOrder && (table.activeOrder.summary.remainingBalance > 0 || table.activeOrder.summary.pendingPayments > 0),
+      ),
+    [posState?.tables],
+  );
+  const selectedCashierTable = useMemo(
+    () => cashierTables.find((table) => table.id === selectedTableId) ?? cashierTables[0] ?? null,
+    [cashierTables, selectedTableId],
+  );
+  const selectedCashierOrder = selectedCashierTable?.activeOrder ?? null;
+  const outstandingByItem = useMemo(() => buildOutstandingByItem(selectedCashierOrder), [selectedCashierOrder]);
+  const selectablePaymentUnits = useMemo(
+    () => buildSelectablePaymentUnits(selectedCashierOrder, outstandingByItem),
+    [outstandingByItem, selectedCashierOrder],
+  );
   const canDeleteSelectedTable = Boolean(selectedTable && !selectedTable.activeOrder && !selectedTable.activeOrderId && selectedTable.status !== 'occupied');
   const createTableName = createTableForm.name.trim();
   const createTableCode = createTableForm.code.trim().toUpperCase();
   const canCreateTable = Boolean(createTableName && createTableCode && isCapacityValid && !busyAction);
   const paymentPreview = useMemo(() => {
-    if (!selectedOrder) {
+    if (!selectedCashierOrder) {
       return { amountApplied: 0, changeDue: 0, overage: 0, selectedRawAmount: 0 };
     }
 
-    const remaining = selectedOrder.summary.remainingBalance;
+    const remaining = selectedCashierOrder.summary.remainingBalance;
     let amountApplied = remaining;
     let selectedRawAmount = remaining;
     if (paymentMode === 'amount') {
@@ -464,7 +509,7 @@ export function AdminPosView() {
       selectedRawAmount,
       changeDue: paymentMethod === 'cash' ? Math.max(amountReceived - amountApplied, 0) : 0,
     };
-  }, [paymentAmount, paymentMethod, paymentMode, paymentPercentage, paymentReceived, selectablePaymentUnits, selectedOrder, selectedPaymentItemIds]);
+  }, [paymentAmount, paymentMethod, paymentMode, paymentPercentage, paymentReceived, selectablePaymentUnits, selectedCashierOrder, selectedPaymentItemIds]);
   const parsedPaymentAmount = parseOptionalNumber(paymentAmount);
   const isPaymentAmountValid = paymentMode !== 'amount' || (parsedPaymentAmount != null && parsedPaymentAmount > 0);
   const parsedPaymentPercentage = parseOptionalNumber(paymentPercentage);
@@ -475,9 +520,9 @@ export function AdminPosView() {
     !requiresCashReceived ||
     (parsedPaymentReceived != null && parsedPaymentReceived > 0 && parsedPaymentReceived >= paymentPreview.amountApplied);
   const isItemsPaymentSelectionValid = paymentMode !== 'items' || (selectedPaymentItemIds.length > 0 && paymentPreview.amountApplied > 0 && paymentPreview.overage <= 0);
-  const selectedOrderHasPendingPayment = selectedOrder?.payments.some((payment) => payment.status === 'pending') ?? false;
+  const selectedOrderHasPendingPayment = selectedCashierOrder?.payments.some((payment) => payment.status === 'pending') ?? false;
   const canSubmitPayment =
-    Boolean(selectedOrder) &&
+    Boolean(selectedCashierOrder) &&
     !busyAction &&
     !selectedOrderHasPendingPayment &&
     paymentPreview.amountApplied > 0 &&
@@ -489,14 +534,6 @@ export function AdminPosView() {
 
   const kitchenQueue = posState?.pendingPreparationKitchen ?? [];
   const barQueue = posState?.pendingPreparationBar ?? [];
-  const closedSales = posState?.closedSales ?? [];
-  const cashierTables = useMemo(
-    () =>
-      (posState?.tables ?? []).filter(
-        (table) => table.activeOrder && (table.activeOrder.summary.remainingBalance > 0 || table.activeOrder.summary.pendingPayments > 0),
-      ),
-    [posState?.tables],
-  );
   const allCashierOrders = useMemo(() => [...(posState?.openOrders ?? []), ...closedSales], [closedSales, posState?.openOrders]);
   const selectedReadyCount = selectedOrder?.items.filter((item) => item.operationalStatus === 'ready').length ?? 0;
   const selectedPickingUpCount = selectedOrder?.items.filter((item) => item.operationalStatus === 'picking_up').length ?? 0;
@@ -627,6 +664,30 @@ export function AdminPosView() {
   }, [activeTab, selectedTableId]);
 
   useEffect(() => {
+    if (!shouldFocusFloorWorkspacePanelRef.current || activeTab !== 'floor' || !selectedTableId) {
+      return;
+    }
+
+    shouldFocusFloorWorkspacePanelRef.current = false;
+
+    if (window.matchMedia('(max-width: 1279px)').matches) {
+      return;
+    }
+
+    const workspacePanel = floorWorkspacePanelRef.current;
+    if (!workspacePanel) {
+      return;
+    }
+
+    const focusAndReveal = window.requestAnimationFrame(() => {
+      workspacePanel.focus({ preventScroll: true });
+      workspacePanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+
+    return () => window.cancelAnimationFrame(focusAndReveal);
+  }, [activeTab, selectedTableId]);
+
+  useEffect(() => {
     if (cashierRightPanel !== 'validations' || !highlightedPendingPaymentId) {
       return;
     }
@@ -662,6 +723,30 @@ export function AdminPosView() {
   useEffect(() => {
     setSelectedPaymentItemIds((current) => current.filter((entry) => selectablePaymentUnits.some((unit) => unit.unitKey === entry)));
   }, [selectablePaymentUnits]);
+
+  useEffect(() => {
+    const shouldResetPaymentForm =
+      !selectedCashierOrder ||
+      (selectedCashierOrder.summary.remainingBalance <= 0 && selectedCashierOrder.summary.pendingPayments <= 0);
+
+    if (!shouldResetPaymentForm) {
+      return;
+    }
+
+    setPaymentMode('total');
+    setPaymentMethod('cash');
+    setPaymentAmount('');
+    setPaymentPercentage('');
+    setPaymentReceived('');
+    setPaymentReference('');
+    setPaymentNotes('');
+    setSelectedPaymentItemIds([]);
+    setHighlightedPendingPaymentId(null);
+  }, [
+    selectedCashierOrder?.id,
+    selectedCashierOrder?.summary.pendingPayments,
+    selectedCashierOrder?.summary.remainingBalance,
+  ]);
 
   useEffect(() => {
     setErrorMessage(null);
@@ -896,7 +981,7 @@ export function AdminPosView() {
   };
 
   const handleRecordPayment = async () => {
-    if (!selectedOrder) {
+    if (!selectedCashierOrder) {
       return;
     }
 
@@ -904,7 +989,7 @@ export function AdminPosView() {
       'Pago registrado',
       async () =>
         recordPosPaymentInSupabase(
-          selectedOrder.id,
+          selectedCashierOrder.id,
           {
             amount: paymentMode === 'amount' ? parseNumber(paymentAmount) : undefined,
             amountReceived: paymentMethod === 'cash' ? parseNumber(paymentReceived) : undefined,
@@ -1332,6 +1417,7 @@ export function AdminPosView() {
                       key={table.id}
                       type="button"
                       onClick={() => {
+                        shouldFocusFloorWorkspacePanelRef.current = true;
                         setSelectedTableId(table.id);
                         if (window.innerWidth < 1280) {
                           setIsTableSheetOpen(true);
@@ -1448,7 +1534,7 @@ export function AdminPosView() {
             </Panel>
           </div>
 
-          <div className="hidden space-y-5 xl:block">
+          <div ref={floorWorkspacePanelRef} tabIndex={-1} className="hidden space-y-5 focus:outline-none xl:block">
             <Panel
               title={selectedTable ? `${selectedTable.name} · ${selectedTable.code}` : 'Selecciona una mesa'}
               subtitle={selectedOrder ? financialStatusLabels[selectedOrder.financialStatus] : 'La cuenta se abre automaticamente al agregar el primer producto'}
@@ -1723,7 +1809,7 @@ export function AdminPosView() {
                       setSelectedTableId(table.id);
                     }}
                     className={`w-full rounded-[1.2rem] border p-4 text-left transition ${
-                      selectedTable?.id === table.id ? 'border-cyanGlow/28 bg-cyanGlow/10' : 'border-white/8 bg-white/[0.02]'
+                      selectedCashierTable?.id === table.id ? 'border-cyanGlow/28 bg-cyanGlow/10' : 'border-white/8 bg-white/[0.02]'
                     }`}
                   >
                     <div className="flex items-start justify-between gap-3">
@@ -1750,15 +1836,15 @@ export function AdminPosView() {
 
           <div ref={cashierPaymentPanelRef} tabIndex={-1} className="focus:outline-none">
             <Panel
-              title={selectedTable ? `Cobro de ${selectedTable.name} · ${selectedTable.code}` : 'Cobro de mesa'}
+              title={selectedCashierTable ? `Cobro de ${selectedCashierTable.name} · ${selectedCashierTable.code}` : 'Cobro de mesa'}
               subtitle="Abonos parciales, total, por porcentaje o por productos"
             >
-              {selectedOrder ? (
+              {selectedCashierOrder ? (
                 <>
                 <div className="grid gap-3 md:grid-cols-3">
-                  <SummaryPill label="Total cuenta" value={formatCurrency(selectedOrder.summary.totalDue)} />
-                  <SummaryPill label="Pagado" value={formatCurrency(selectedOrder.summary.totalPaid)} />
-                  <SummaryPill label="Saldo" value={formatCurrency(selectedOrder.summary.remainingBalance)} />
+                  <SummaryPill label="Total cuenta" value={formatCurrency(selectedCashierOrder.summary.totalDue)} />
+                  <SummaryPill label="Pagado" value={formatCurrency(selectedCashierOrder.summary.totalPaid)} />
+                  <SummaryPill label="Saldo" value={formatCurrency(selectedCashierOrder.summary.remainingBalance)} />
                 </div>
 
                 <div className="mt-5 grid gap-3 md:grid-cols-2">
@@ -1960,6 +2046,100 @@ export function AdminPosView() {
                 </div>
 
                 <div className="rounded-[1.2rem] border border-white/8 bg-white/[0.02] p-4">
+                  <details className="group">
+                    <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
+                      <div>
+                        <p className="text-[0.68rem] uppercase tracking-[0.22em] text-cyanGlow/75">Productos vendidos en la jornada actual</p>
+                        <p className="mt-2 text-sm text-mist">
+                          {activeSalesSessionSummary.products.length
+                            ? `${activeSalesSessionSummary.products.length} producto(s) agrupado(s) en esta jornada`
+                            : 'Todavia no hay productos vendidos resumidos en esta jornada activa.'}
+                        </p>
+                      </div>
+                      <span className="text-[0.68rem] uppercase tracking-[0.18em] text-mist transition group-open:text-cyanGlow">Ver detalle</span>
+                    </summary>
+                    <SalesSessionProductsSummary
+                      products={activeSalesSessionSummary.products ?? []}
+                      emptyMessage="Todavia no hay productos vendidos resumidos en esta jornada activa."
+                    />
+                  </details>
+                </div>
+
+                <div className="rounded-[1.2rem] border border-white/8 bg-white/[0.02] p-4">
+                  <p className="text-[0.68rem] uppercase tracking-[0.22em] text-cyanGlow/75">Ventas pagadas de la jornada actual</p>
+                  <div className="mt-3 space-y-3">
+                    {activeSalesSessionClosedSales.map((order) => (
+                      <details key={`active-${order.id}`} className="rounded-[1.2rem] border border-white/8 bg-black/15 p-4">
+                        <summary className="list-none cursor-pointer">
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                              <p className="font-medium text-ivory">{resolveOrderTableLabel(order, tablesById)}</p>
+                              <p className="mt-1 text-xs uppercase tracking-[0.18em] text-cyanGlow/75">
+                                Cerrada {formatDateTime(order.closedAt ?? order.updatedAt)}
+                              </p>
+                            </div>
+                            <span className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-3 py-1 text-[0.65rem] uppercase tracking-[0.22em] text-emerald-200">
+                              Pagada
+                            </span>
+                          </div>
+                          <div className="mt-3 grid gap-2 text-sm text-mist">
+                            <p>Total: {formatCurrency(order.summary.totalDue)}</p>
+                            <p>Pagado: {formatCurrency(order.summary.totalPaid)}</p>
+                            <p>Metodos: {formatPaymentMethodsSummary(order.payments.filter((payment) => payment.status === 'confirmed'))}</p>
+                          </div>
+                        </summary>
+
+                        <div className="mt-4 space-y-4 border-t border-white/8 pt-4">
+                          <div>
+                            <p className="text-[0.68rem] uppercase tracking-[0.22em] text-cyanGlow/75">Productos</p>
+                            <div className="mt-3 space-y-2">
+                              {order.items
+                                .filter((item) => item.operationalStatus !== 'cancelled')
+                                .map((item) => (
+                                  <div key={item.id} className="rounded-[1rem] border border-white/8 bg-black/15 px-3 py-3 text-sm text-mist">
+                                    <div className="flex items-start justify-between gap-3">
+                                      <p className="font-medium text-ivory">
+                                        {item.quantity} × {item.productName}
+                                      </p>
+                                      <p>{formatCurrency(item.totalPrice)}</p>
+                                    </div>
+                                    {item.notes ? <p className="mt-2 text-sm text-cyanGlow">{item.notes}</p> : null}
+                                  </div>
+                                ))}
+                            </div>
+                          </div>
+
+                          <div>
+                            <p className="text-[0.68rem] uppercase tracking-[0.22em] text-cyanGlow/75">Pagos registrados</p>
+                            <div className="mt-3 space-y-2">
+                              {order.payments.map((payment) => (
+                                <div key={payment.id} className="rounded-[1rem] border border-white/8 bg-black/15 px-3 py-3 text-sm text-mist">
+                                  <div className="flex flex-wrap items-start justify-between gap-3">
+                                    <div>
+                                      <p className="font-medium text-ivory">{paymentMethodLabels[payment.method]}</p>
+                                      <p className="mt-1 text-xs uppercase tracking-[0.18em] text-mist">{formatDateTime(payment.confirmedAt ?? payment.createdAt)}</p>
+                                    </div>
+                                    <div className="text-right">
+                                      <p className="font-medium text-ivory">{formatCurrency(payment.amountApplied)}</p>
+                                      <p className="mt-1 text-xs uppercase tracking-[0.18em] text-mist">
+                                        {payment.status === 'confirmed' ? 'Confirmado' : payment.status === 'rejected' ? 'Rechazado' : 'Pendiente'}
+                                      </p>
+                                    </div>
+                                  </div>
+                                  {payment.reference ? <p className="mt-2 text-sm text-amberGlow">{payment.reference}</p> : null}
+                                  {payment.notes ? <p className="mt-2 text-sm text-cyanGlow">{payment.notes}</p> : null}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </details>
+                    ))}
+                    {!activeSalesSessionClosedSales.length ? <EmptyState message="Todavia no hay ventas pagadas cerradas dentro de la jornada vigente." /> : null}
+                  </div>
+                </div>
+
+                <div className="rounded-[1.2rem] border border-white/8 bg-white/[0.02] p-4">
                   <p className="text-[0.68rem] uppercase tracking-[0.22em] text-cyanGlow/75">Control de jornada</p>
                   {posState?.activeSalesSession ? (
                     <div className="mt-4 space-y-4">
@@ -2080,18 +2260,10 @@ export function AdminPosView() {
 
                           <div className="rounded-[1rem] border border-white/8 bg-black/15 p-4">
                             <p className="text-[0.68rem] uppercase tracking-[0.22em] text-cyanGlow/75">Productos vendidos</p>
-                            <div className="mt-3 space-y-2">
-                              {(selectedHistoricalSession.summary?.products ?? []).slice(0, 10).map((product) => (
-                                <div key={`${product.productName}-${product.prepArea}-${product.menuItemSourceKey ?? 'sin-clave'}`} className="flex items-center justify-between gap-3 rounded-[0.9rem] border border-white/8 bg-white/[0.02] px-3 py-2 text-sm">
-                                  <div>
-                                    <p className="font-medium text-ivory">{product.productName}</p>
-                                    <p className="mt-1 text-xs uppercase tracking-[0.18em] text-mist">{product.quantity} unidad(es)</p>
-                                  </div>
-                                  <p className="text-mist">{formatCurrency(product.totalAmount)}</p>
-                                </div>
-                              ))}
-                              {!(selectedHistoricalSession.summary?.products ?? []).length ? <EmptyState message="No hay productos resumidos en esta jornada." /> : null}
-                            </div>
+                            <SalesSessionProductsSummary
+                              products={selectedHistoricalSession.summary?.products ?? []}
+                              emptyMessage="No hay productos resumidos en esta jornada."
+                            />
                           </div>
 
                           <div className="space-y-3">
@@ -2259,6 +2431,100 @@ interface RealtimeSignal {
   tone: RealtimeSignalTone;
 }
 
+function applyRealtimeEventToPosState(state: PosState, event: PosRealtimeEvent) {
+  if (event.table === 'pos_order_items' && event.newRecord) {
+    const itemId = asString(event.newRecord.id);
+    if (!itemId) {
+      return state;
+    }
+
+    const existingItem = findRealtimeOrderItem(state, itemId);
+    if (!existingItem) {
+      return state;
+    }
+
+    return mergeUpdatedItemsIntoPosState(state, [
+      {
+        ...existingItem,
+        cancelledAt: asNullableString(event.newRecord.cancelled_at) ?? existingItem.cancelledAt ?? null,
+        cancelledByEmail: asNullableString(event.newRecord.cancelled_by_email) ?? existingItem.cancelledByEmail ?? null,
+        cancellationReason: asNullableString(event.newRecord.cancellation_reason) ?? existingItem.cancellationReason ?? null,
+        deliveredAt: asNullableString(event.newRecord.delivered_at) ?? existingItem.deliveredAt ?? null,
+        deliveredByEmail: asNullableString(event.newRecord.delivered_by_email) ?? existingItem.deliveredByEmail ?? null,
+        financialStatus: (asString(event.newRecord.financial_status) as PosOrderItem['financialStatus']) || existingItem.financialStatus,
+        notes: asNullableString(event.newRecord.notes) ?? existingItem.notes ?? '',
+        operationalStatus: (asString(event.newRecord.operational_status) as PosOrderItem['operationalStatus']) || existingItem.operationalStatus,
+        pickingUpAt: asNullableString(event.newRecord.picking_up_at) ?? existingItem.pickingUpAt ?? null,
+        pickingUpByEmail: asNullableString(event.newRecord.picking_up_by_email) ?? existingItem.pickingUpByEmail ?? null,
+        preparationStartedAt: asNullableString(event.newRecord.preparation_started_at) ?? existingItem.preparationStartedAt ?? null,
+        quantity: asNumber(event.newRecord.quantity) ?? existingItem.quantity,
+        readyAt: asNullableString(event.newRecord.ready_at) ?? existingItem.readyAt ?? null,
+        sentAt: asNullableString(event.newRecord.sent_at) ?? existingItem.sentAt ?? null,
+        totalPrice: asNumber(event.newRecord.total_price) ?? existingItem.totalPrice,
+        unitPrice: asNumber(event.newRecord.unit_price) ?? existingItem.unitPrice,
+        updatedAt: asString(event.newRecord.updated_at) || existingItem.updatedAt,
+        updatedByEmail: asNullableString(event.newRecord.updated_by_email) ?? existingItem.updatedByEmail ?? null,
+      },
+    ]);
+  }
+
+  if (event.table === 'pos_payments' && event.newRecord) {
+    const paymentId = asString(event.newRecord.id);
+    const orderId = asString(event.newRecord.order_id);
+    if (!paymentId || !orderId) {
+      return state;
+    }
+
+    const existingPayment = findRealtimePayment(state, paymentId);
+    const basePayment = existingPayment ?? {
+      allocationMode: (asString(event.newRecord.allocation_mode) as PaymentAllocationMode) || 'total',
+      amountApplied: asNumber(event.newRecord.amount_applied) ?? 0,
+      amountReceived: asNumber(event.newRecord.amount_received),
+      changeDue: asNumber(event.newRecord.change_due),
+      confirmedAt: asNullableString(event.newRecord.confirmed_at),
+      confirmedByEmail: asNullableString(event.newRecord.confirmed_by_email),
+      createdAt: asString(event.newRecord.created_at) || new Date().toISOString(),
+      createdByEmail: asString(event.newRecord.created_by_email) || '',
+      id: paymentId,
+      method: (asString(event.newRecord.method) as PaymentMethod) || 'other',
+      notes: asNullableString(event.newRecord.notes),
+      orderId,
+      percentageApplied: asNumber(event.newRecord.percentage_applied),
+      reference: asNullableString(event.newRecord.reference),
+      rejectedAt: asNullableString(event.newRecord.rejected_at),
+      rejectedByEmail: asNullableString(event.newRecord.rejected_by_email),
+      rejectionReason: asNullableString(event.newRecord.rejection_reason),
+      salesSessionId: asNullableString(event.newRecord.sales_session_id),
+      status: (asString(event.newRecord.status) as PosPayment['status']) || 'pending',
+      targetItemIds: Array.isArray(event.newRecord.target_item_ids) ? (event.newRecord.target_item_ids as string[]) : [],
+    };
+
+    return mergePaymentIntoPosState(state, {
+      ...basePayment,
+      allocationMode: (asString(event.newRecord.allocation_mode) as PaymentAllocationMode) || basePayment.allocationMode,
+      amountApplied: asNumber(event.newRecord.amount_applied) ?? basePayment.amountApplied,
+      amountReceived: asNumber(event.newRecord.amount_received) ?? basePayment.amountReceived ?? null,
+      changeDue: asNumber(event.newRecord.change_due) ?? basePayment.changeDue ?? null,
+      confirmedAt: asNullableString(event.newRecord.confirmed_at) ?? basePayment.confirmedAt ?? null,
+      confirmedByEmail: asNullableString(event.newRecord.confirmed_by_email) ?? basePayment.confirmedByEmail ?? null,
+      createdAt: asString(event.newRecord.created_at) || basePayment.createdAt,
+      createdByEmail: asString(event.newRecord.created_by_email) || basePayment.createdByEmail,
+      method: (asString(event.newRecord.method) as PaymentMethod) || basePayment.method,
+      notes: asNullableString(event.newRecord.notes) ?? basePayment.notes ?? null,
+      percentageApplied: asNumber(event.newRecord.percentage_applied) ?? basePayment.percentageApplied ?? null,
+      reference: asNullableString(event.newRecord.reference) ?? basePayment.reference ?? null,
+      rejectedAt: asNullableString(event.newRecord.rejected_at) ?? basePayment.rejectedAt ?? null,
+      rejectedByEmail: asNullableString(event.newRecord.rejected_by_email) ?? basePayment.rejectedByEmail ?? null,
+      rejectionReason: asNullableString(event.newRecord.rejection_reason) ?? basePayment.rejectionReason ?? null,
+      salesSessionId: asNullableString(event.newRecord.sales_session_id) ?? basePayment.salesSessionId ?? null,
+      status: (asString(event.newRecord.status) as PosPayment['status']) || basePayment.status,
+      targetItemIds: Array.isArray(event.newRecord.target_item_ids) ? (event.newRecord.target_item_ids as string[]) : basePayment.targetItemIds,
+    });
+  }
+
+  return state;
+}
+
 function resolveRealtimeSignal(event: PosRealtimeEvent, state: PosState | null, currentActorEmail: string): RealtimeSignal | null {
   if (event.table === 'pos_order_items' && event.eventType === 'UPDATE' && event.newRecord) {
     const newStatus = String(event.newRecord.operational_status ?? '');
@@ -2321,6 +2587,49 @@ function resolveRealtimeSignal(event: PosRealtimeEvent, state: PosState | null, 
       title: 'Pago pendiente por validar',
       tone: 'cashier',
     };
+  }
+
+  return null;
+}
+
+function findRealtimeOrderItem(state: PosState, itemId: string) {
+  for (const order of [...state.openOrders, ...state.closedSales]) {
+    const item = order.items.find((entry) => entry.id === itemId);
+    if (item) {
+      return item;
+    }
+  }
+
+  return null;
+}
+
+function findRealtimePayment(state: PosState, paymentId: string) {
+  for (const order of [...state.openOrders, ...state.closedSales]) {
+    const payment = order.payments.find((entry) => entry.id === paymentId);
+    if (payment) {
+      return payment;
+    }
+  }
+
+  return null;
+}
+
+function asString(value: unknown) {
+  return typeof value === 'string' ? value : '';
+}
+
+function asNullableString(value: unknown) {
+  return typeof value === 'string' ? value : value == null ? null : String(value);
+}
+
+function asNumber(value: unknown) {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
   }
 
   return null;
@@ -2512,6 +2821,44 @@ function SummaryPill({ label, value }: { label: string; value: string }) {
     <div className="rounded-[1rem] border border-white/8 bg-white/[0.02] px-3 py-2.5 sm:rounded-[1.15rem] sm:px-4 sm:py-3">
       <p className="text-[0.68rem] uppercase tracking-[0.22em] text-mist">{label}</p>
       <p className="mt-2 text-sm font-medium text-ivory">{value}</p>
+    </div>
+  );
+}
+
+function SalesSessionProductsSummary({
+  emptyMessage,
+  products,
+}: {
+  emptyMessage: string;
+  products: PosSalesSessionSummary['products'];
+}) {
+  const groupedProducts = groupSalesSessionProductsByPrepArea(products);
+
+  if (!groupedProducts.length) {
+    return <EmptyState message={emptyMessage} />;
+  }
+
+  return (
+    <div className="mt-3 space-y-4">
+      {groupedProducts.map((group) => (
+        <div key={group.prepArea} className="space-y-2">
+          <p className="text-[0.68rem] uppercase tracking-[0.18em] text-mist">{group.label}</p>
+          <div className="space-y-2">
+            {group.products.map((product) => (
+              <div
+                key={`${group.prepArea}-${product.productName}-${product.menuItemSourceKey ?? 'sin-clave'}`}
+                className="flex items-center justify-between gap-3 rounded-[0.9rem] border border-white/8 bg-white/[0.02] px-3 py-2 text-sm"
+              >
+                <div>
+                  <p className="font-medium text-ivory">{product.productName}</p>
+                  <p className="mt-1 text-xs uppercase tracking-[0.18em] text-mist">{product.quantity} unidad(es)</p>
+                </div>
+                <p className="text-mist">{formatCurrency(product.totalAmount)}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -2912,6 +3259,25 @@ function buildLiveSalesSessionSummary(activeSession: PosSalesSession | null, ord
   };
 }
 
+function groupSalesSessionProductsByPrepArea(products: PosSalesSessionSummary['products']) {
+  const prepAreaLabels: Record<string, string> = {
+    bar: 'Bar',
+    kitchen: 'Cocina',
+  };
+  const grouped = new Map<string, PosSalesSessionSummary['products']>();
+
+  for (const product of products) {
+    const key = product.prepArea || 'other';
+    grouped.set(key, [...(grouped.get(key) ?? []), product]);
+  }
+
+  return Array.from(grouped.entries()).map(([prepArea, entries]) => ({
+    label: prepAreaLabels[prepArea] ?? 'Otros',
+    prepArea,
+    products: entries,
+  }));
+}
+
 function formatCurrency(value: number) {
   return new Intl.NumberFormat('es-CO', {
     currency: 'COP',
@@ -3042,6 +3408,20 @@ function resolveReplacementAnchorTimestamp(item: PosOrderItem, itemsById: Map<st
 
 function resolvePreparationQueueTimestampForUi(item: PosOrderItem) {
   return item.sentAt ?? item.createdAt;
+}
+
+function getPosFallbackSyncInterval(tab: WorkspaceTab) {
+  switch (tab) {
+    case 'kitchen':
+    case 'bar':
+      return 3000;
+    case 'cashier':
+      return 4000;
+    case 'floor':
+      return 5000;
+    default:
+      return 0;
+  }
 }
 
 function parseOptionalNumber(value: string) {

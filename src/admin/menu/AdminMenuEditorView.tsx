@@ -501,7 +501,7 @@ export function AdminMenuEditorView() {
         buildAdminMenuApplyHistoryEntry(result.artifact, result.fileTargets),
         ...current,
       ]);
-      setActiveSection('snapshots');
+      setActiveSection('changes');
       setExportFeedback(
         `Se aplicaron ${result.artifact.summary.appliedItems} item${result.artifact.summary.appliedItems === 1 ? '' : 's'} al catalogo JSON. Se actualizaron public/data/menu.json y docs/data/menu.json con respaldo en data/admin-history.`,
       );
@@ -578,7 +578,7 @@ export function AdminMenuEditorView() {
 
         setExcelSyncReport(report);
         setExcelImportPreview(null);
-        setActiveSection('snapshots');
+        setActiveSection('changes');
         setExportFeedback(
           `${statusLabel}. Hojas afectadas: ${report.summary.sheetDifferences}, items con diferencias: ${report.summary.itemDifferences}, campos distintos: ${report.summary.fieldDifferences}.`,
         );
@@ -603,7 +603,7 @@ export function AdminMenuEditorView() {
 
         setExcelSyncReport(result.report);
         setExcelImportPreview(null);
-        setActiveSection('snapshots');
+        setActiveSection('changes');
         setExportFeedback(
           `Excel derivado listo como ${result.derivedFileName}. Se comparo contra ${file.name} y se detectaron ${result.report.summary.itemDifferences} item${result.report.summary.itemDifferences === 1 ? '' : 's'} con diferencias.`,
         );
@@ -657,7 +657,7 @@ export function AdminMenuEditorView() {
 
       setExcelImportPreview(preview);
       setExcelSyncReport(preview.report);
-      setActiveSection('snapshots');
+      setActiveSection('changes');
       setExportFeedback(
         `${statusLabel}. El archivo ${file.name} trae ${preview.totalChangedItems} item${preview.totalChangedItems === 1 ? '' : 's'} editado${preview.totalChangedItems === 1 ? '' : 's'} para revisar antes de sincronizar.`,
       );
@@ -723,7 +723,7 @@ export function AdminMenuEditorView() {
       setDrafts(nextDrafts);
       setSelectedDraftKey(nextDrafts[0]?.draftKey ?? null);
       setExcelImportPreview(null);
-      setActiveSection('snapshots');
+      setActiveSection('changes');
       setExportFeedback(
         `Supabase sincronizado desde ${excelImportPreview.fileName} con ${result.appliedCount} item${result.appliedCount === 1 ? '' : 's'} aplicado${result.appliedCount === 1 ? '' : 's'}.`,
       );
@@ -753,8 +753,8 @@ export function AdminMenuEditorView() {
           <p className="text-[0.72rem] uppercase tracking-[0.28em] text-cyanGlow/80">Editor de catalogo</p>
           <h1 className="mt-4 font-display text-[2.5rem] leading-none text-ivory sm:text-[3.3rem]">Menu</h1>
           <p className="mt-4 text-base leading-8 text-mist sm:text-lg">
-            Centro operativo del catalogo. Aqui editas en borrador local, revisas cambios, trabajas con snapshots y decides
-            cuando guardar de verdad en Supabase o sincronizar contra Excel.
+            Centro operativo del catalogo. Aqui editas el catalogo, revisas cambios y decides cuando guardar de verdad en
+            Supabase o sincronizarlo contra Excel.
           </p>
         </div>
 
@@ -807,9 +807,8 @@ export function AdminMenuEditorView() {
 
       <section className="mt-8 rounded-[1.75rem] border border-white/10 bg-white/[0.03] p-3 sm:p-4">
         <div className="flex flex-wrap gap-2">
-          <AdminSectionTab active={activeSection === 'editor'} label="Editor" onClick={() => setActiveSection('editor')} />
-          <AdminSectionTab active={activeSection === 'changes'} label="Cambios" onClick={() => setActiveSection('changes')} />
-          <AdminSectionTab active={activeSection === 'snapshots'} label="Snapshots" onClick={() => setActiveSection('snapshots')} />
+          <AdminSectionTab active={activeSection === 'editor'} label="Catalogo" onClick={() => setActiveSection('editor')} />
+          <AdminSectionTab active={activeSection === 'changes'} label="Excel y sincronizacion" onClick={() => setActiveSection('changes')} />
         </div>
       </section>
 
@@ -1284,52 +1283,35 @@ export function AdminMenuEditorView() {
                   </div>
 
                   <div className="rounded-[1.5rem] border border-white/10 bg-obsidian/35 p-4 sm:p-5">
-                    <p className="text-[0.68rem] uppercase tracking-[0.24em] text-cyanGlow/80">Aplicar al catalogo JSON</p>
+                    <p className="text-[0.68rem] uppercase tracking-[0.24em] text-cyanGlow/80">Excel y sincronizacion</p>
                     <p className="mt-3 text-sm leading-7 text-mist">
-                      Esta accion queda como flujo transitorio/local. Solicita acceso a la raiz del repo para actualizar <span className="text-ivory">public/data/menu.json</span>{' '}
-                      y <span className="text-ivory">docs/data/menu.json</span>.
+                      Compara el estado actual de Supabase contra el Excel base, genera un Excel derivado desde la app o
+                      importa un Excel actualizado para decidir si Supabase debe sincronizarse.
                     </p>
                     <div className="mt-4 flex flex-wrap gap-2">
                       <button
                         type="button"
-                        onClick={handleApplyCatalogJson}
-                        disabled={!adminApplyArtifact || adminApplyArtifact.summary.appliedItems === 0}
-                        className="interactive-button rounded-full border border-cyanGlow/20 bg-cyanGlow/10 px-4 py-2 text-[0.68rem] font-semibold uppercase tracking-[0.2em] text-cyanGlow disabled:cursor-not-allowed disabled:opacity-45"
+                        onClick={() => handleOpenBaseExcel('compare')}
+                        className="interactive-button rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-[0.68rem] font-semibold uppercase tracking-[0.2em] text-ivory"
                       >
-                        Aplicar cambios al catalogo JSON
+                        Comparar con Excel base
                       </button>
                       <button
                         type="button"
-                        onClick={() => handleDownloadExcelRows(excelChangeRows)}
-                        disabled={!excelChangeRows.length}
-                        className="interactive-button rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-[0.68rem] font-semibold uppercase tracking-[0.2em] text-ivory disabled:cursor-not-allowed disabled:opacity-45"
+                        onClick={() => handleOpenBaseExcel('derive')}
+                        className="interactive-button rounded-full border border-cyanGlow/20 bg-cyanGlow/10 px-4 py-2 text-[0.68rem] font-semibold uppercase tracking-[0.2em] text-cyanGlow"
                       >
-                        Exportar salida Excel JSON
+                        Generar Excel derivado
                       </button>
                       <button
                         type="button"
-                        onClick={handleDownloadExcelCsv}
-                        disabled={!excelChangeRows.length}
-                        className="interactive-button rounded-full border border-white/10 bg-transparent px-4 py-2 text-[0.68rem] font-semibold uppercase tracking-[0.2em] text-mist hover:text-ivory disabled:cursor-not-allowed disabled:opacity-45"
+                        onClick={handleOpenExcelImport}
+                        className="interactive-button rounded-full border border-amberGlow/20 bg-amberGlow/10 px-4 py-2 text-[0.68rem] font-semibold uppercase tracking-[0.2em] text-amberGlow"
                       >
-                        Exportar salida Excel CSV
+                        Importar Excel y preparar sincronizacion
                       </button>
                     </div>
-                    <div className="mt-4 rounded-[1.2rem] border border-white/10 bg-white/[0.03] p-4 text-xs leading-6 text-mist">
-                      {adminApplyArtifact
-                        ? `${adminApplyArtifact.summary.appliedItems} item${adminApplyArtifact.summary.appliedItems === 1 ? '' : 's'} listo${adminApplyArtifact.summary.appliedItems === 1 ? '' : 's'} para aplicar, ${adminApplyArtifact.summary.blockedItems} bloqueado${adminApplyArtifact.summary.blockedItems === 1 ? '' : 's'} y ${adminApplyArtifact.summary.changedFields} cambio${adminApplyArtifact.summary.changedFields === 1 ? '' : 's'} en la salida de aplicacion.`
-                        : 'Aun no hay un payload de aplicacion disponible.'}
-                    </div>
-                  </div>
-
-                  <div className="rounded-[1.5rem] border border-white/10 bg-obsidian/35 p-4 sm:p-5">
-                    <p className="text-[0.68rem] uppercase tracking-[0.24em] text-cyanGlow/80">Payload final de aplicacion</p>
-                    <p className="mt-3 text-sm leading-7 text-mist">
-                      Esta es la estructura orientada a futura persistencia real del catalogo, distinta del snapshot de trabajo.
-                    </p>
-                    <pre className="mt-4 max-h-[22rem] overflow-auto rounded-[1.2rem] border border-white/10 bg-obsidian/55 p-4 text-xs leading-6 text-mist">
-                      {JSON.stringify(adminApplyArtifact ?? adminApplyPayload, null, 2)}
-                    </pre>
+                    {exportFeedback ? <p className="mt-4 text-xs leading-6 text-cyanGlow/85">{exportFeedback}</p> : null}
                   </div>
                 </div>
               </div>
@@ -1337,86 +1319,112 @@ export function AdminMenuEditorView() {
 
             <section className="rounded-[1.75rem] border border-white/10 bg-white/[0.03] p-4 sm:p-5">
               <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                <div className="min-w-0">
-                  <p className="text-[0.68rem] uppercase tracking-[0.24em] text-cyanGlow/80">Salida pensada para Excel</p>
+                <div className="max-w-3xl">
+                  <p className="text-[0.68rem] uppercase tracking-[0.24em] text-cyanGlow/80">Estado frente al Excel</p>
                   <p className="mt-2 text-sm leading-7 text-mist">
-                    Vista orientada a revision por filas/campos para detectar rapido que deberia actualizarse en la fuente del catalogo.
+                    Vista corta del estado de sincronizacion para saber rapido si Supabase esta alineado, tiene cambios
+                    pendientes o quedo desincronizado frente al archivo comparado.
+                  </p>
+                </div>
+                <span
+                  className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.16em] ${
+                    excelSyncReport?.status === 'synced'
+                      ? 'border border-emerald-300/20 bg-emerald-300/10 text-emerald-200'
+                      : excelSyncReport?.status === 'pending'
+                        ? 'border border-amberGlow/20 bg-amberGlow/10 text-amberGlow'
+                        : excelSyncReport?.status === 'desynced'
+                          ? 'border border-rose-200/20 bg-rose-200/10 text-rose-100'
+                          : 'border border-white/10 bg-white/[0.04] text-mist'
+                  }`}
+                >
+                  {excelSyncReport
+                    ? excelSyncReport.status === 'synced'
+                      ? 'Sincronizado'
+                      : excelSyncReport.status === 'pending'
+                        ? 'Cambios pendientes'
+                        : 'Desincronizado'
+                    : 'Sin comparar'}
+                </span>
+              </div>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                <InlineMetric label="Archivo" value={excelSyncReport?.fileName ?? 'Sin leer'} />
+                <InlineMetric label="Excel base" value={excelSyncReport?.baseExcelModifiedAt ? formatSnapshotDate(excelSyncReport.baseExcelModifiedAt) : 'Sin leer'} />
+                <InlineMetric label="Comparacion" value={excelSyncReport?.generatedAt ? formatSnapshotDate(excelSyncReport.generatedAt) : 'Pendiente'} />
+                <InlineMetric label="Hojas afectadas" value={String(excelSyncReport?.summary.sheetDifferences ?? 0)} />
+                <InlineMetric label="Items con diferencias" value={String(excelSyncReport?.summary.itemDifferences ?? 0)} />
+                <InlineMetric label="Campos distintos" value={String(excelSyncReport?.summary.fieldDifferences ?? 0)} />
+              </div>
+            </section>
+
+            <section className="rounded-[1.75rem] border border-white/10 bg-white/[0.03] p-4 sm:p-5">
+              <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                <div className="min-w-0">
+                  <p className="text-[0.68rem] uppercase tracking-[0.24em] text-cyanGlow/80">Diferencias legibles con Excel</p>
+                  <p className="mt-2 text-sm leading-7 text-mist">
+                    Revision humana de los campos que no coinciden entre Supabase y el archivo comparado.
                   </p>
                 </div>
                 <div className="shrink-0 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-amberGlow">
-                  {excelChangeRows.length} fila{excelChangeRows.length === 1 ? '' : 's'}
+                  {excelSyncReport?.summary.fieldDifferences ?? 0} diferencia{(excelSyncReport?.summary.fieldDifferences ?? 0) === 1 ? '' : 's'}
                 </div>
               </div>
-              <pre className="mt-4 max-h-[18rem] overflow-auto rounded-[1.4rem] border border-white/10 bg-obsidian/55 p-4 text-xs leading-6 text-mist">
-                {excelChangeRows.length
-                  ? excelCsvPreview
-                  : 'Aun no hay filas para una salida orientada a Excel.'}
-              </pre>
-            </section>
-
-            <section className="rounded-[1.75rem] border border-white/10 bg-white/[0.03] p-4 sm:p-5">
-              <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                <div className="min-w-0">
-                  <p className="text-[0.68rem] uppercase tracking-[0.24em] text-cyanGlow/80">Payload preview</p>
-                  <p className="mt-2 text-sm leading-7 text-mist">
-                    Vista de los items editados tal como quedarian listos para una futura persistencia.
-                  </p>
-                  {exportFeedback ? (
-                    <p className="mt-3 text-xs leading-6 text-cyanGlow/85">{exportFeedback}</p>
-                  ) : null}
-                </div>
-                <div className="flex flex-wrap items-center gap-2 xl:justify-end">
-                  <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-amberGlow">
-                    {pendingPayloadPreview.length}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      handleDownloadPayload(
-                        pendingPayloadPreview,
-                        'zafiro-menu-cambios.json',
-                        'No hay cambios locales para exportar.',
-                      )
-                    }
-                    disabled={!pendingPayloadPreview.length}
-                    className="interactive-button rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-[0.68rem] font-semibold uppercase tracking-[0.2em] text-ivory disabled:cursor-not-allowed disabled:opacity-45"
-                  >
-                    Exportar cambios
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      handleCopyPayload(
-                        pendingPayloadPreview,
-                        'JSON de cambios copiado al portapapeles.',
-                        'No hay cambios locales para copiar.',
-                      )
-                    }
-                    disabled={!pendingPayloadPreview.length}
-                    className="interactive-button rounded-full border border-white/10 bg-transparent px-4 py-2 text-[0.68rem] font-semibold uppercase tracking-[0.2em] text-mist hover:text-ivory disabled:cursor-not-allowed disabled:opacity-45"
-                  >
-                    Copiar cambios
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      handleDownloadPayload(
-                        fullPayloadPreview,
-                        'zafiro-menu-completo-serializado.json',
-                        'No hay items para exportar.',
-                      )
-                    }
-                    className="interactive-button rounded-full border border-cyanGlow/20 bg-cyanGlow/10 px-4 py-2 text-[0.68rem] font-semibold uppercase tracking-[0.2em] text-cyanGlow"
-                  >
-                    Exportar catalogo completo
-                  </button>
-                </div>
+              <div className="mt-4 max-h-[28rem] overflow-y-auto space-y-3">
+                {(excelSyncReport?.items ?? []).length ? (
+                  excelSyncReport!.items.map((item) => (
+                    <div key={item.draftKey} className="rounded-[1.2rem] border border-white/10 bg-white/[0.03] p-4">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-semibold text-ivory">{item.itemName}</span>
+                        <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-1 text-[0.58rem] font-semibold uppercase tracking-[0.16em] text-mist">
+                          {item.hojaOrigen}
+                        </span>
+                        <span
+                          className={`rounded-full px-2 py-1 text-[0.58rem] font-semibold uppercase tracking-[0.16em] ${
+                            item.status === 'pending'
+                              ? 'border border-amberGlow/20 bg-amberGlow/10 text-amberGlow'
+                              : 'border border-rose-200/20 bg-rose-200/10 text-rose-100'
+                          }`}
+                        >
+                          {item.status === 'pending' ? 'Pendiente' : 'Desincronizado'}
+                        </span>
+                      </div>
+                      <p className="mt-2 text-xs uppercase tracking-[0.18em] text-mist">
+                        {item.itemSlug} · {item.tipo} · {item.subgrupo}
+                      </p>
+                      <div className="mt-3 space-y-3">
+                        {item.differences.length ? (
+                          item.differences.map((diff) => (
+                            <div key={`${item.draftKey}-${diff.field}`} className="rounded-xl border border-white/10 bg-obsidian/45 p-3">
+                              <p className="text-[0.58rem] uppercase tracking-[0.16em] text-cyanGlow/85">{diff.fieldLabel}</p>
+                              <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                                <div>
+                                  <p className="text-[0.58rem] uppercase tracking-[0.16em] text-mist">
+                                    {excelSyncReport?.referenceLabel ?? 'Referencia'}
+                                  </p>
+                                  <p className="mt-1 text-sm leading-6 text-mist">{diff.before}</p>
+                                </div>
+                                <div>
+                                  <p className="text-[0.58rem] uppercase tracking-[0.16em] text-cyanGlow/85">
+                                    {excelSyncReport?.currentLabel ?? 'Actual'}
+                                  </p>
+                                  <p className="mt-1 text-sm leading-6 text-ivory">{diff.after}</p>
+                                </div>
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="rounded-xl border border-white/10 bg-obsidian/45 p-3 text-sm text-mist">
+                            Este item no tiene diff de campos, pero si una inconsistencia estructural frente al Excel base.
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="rounded-[1.2rem] border border-white/10 bg-white/[0.03] p-4 text-sm text-mist">
+                    Cuando hagas la comparacion, aqui apareceran las diferencias legibles frente al Excel base.
+                  </div>
+                )}
               </div>
-              <pre className="mt-4 max-h-[26rem] overflow-auto rounded-[1.4rem] border border-white/10 bg-obsidian/55 p-4 text-xs leading-6 text-mist">
-                {pendingPayloadPreview.length
-                  ? JSON.stringify(pendingPayloadPreview, null, 2)
-                  : 'Sin cambios pendientes. El payload aparecera aqui cuando edites productos.'}
-              </pre>
             </section>
 
             <section className="rounded-[1.75rem] border border-white/10 bg-white/[0.03] p-4 sm:p-5">
@@ -1457,7 +1465,7 @@ export function AdminMenuEditorView() {
           </>
         ) : null}
 
-        {activeSection === 'snapshots' ? (
+        {false ? (
           <>
             <section className="rounded-[1.75rem] border border-white/10 bg-white/[0.03] p-4 sm:p-5">
               <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
@@ -1550,9 +1558,9 @@ export function AdminMenuEditorView() {
                       }`}
                     >
                       {excelSyncReport
-                        ? excelSyncReport.status === 'synced'
+                        ? excelSyncReport?.status === 'synced'
                           ? 'Sincronizado'
-                          : excelSyncReport.status === 'pending'
+                          : excelSyncReport?.status === 'pending'
                             ? 'Cambios pendientes'
                             : 'Desincronizado'
                         : 'Sin comparar'}
@@ -1561,18 +1569,18 @@ export function AdminMenuEditorView() {
 
                   <p className="mt-3 text-sm leading-7 text-mist">
                     {excelSyncReport
-                      ? excelSyncReport.status === 'synced'
-                        ? `${excelSyncReport.currentLabel} y ${excelSyncReport.referenceLabel} coinciden hoja por hoja y campo por campo.`
-                        : excelSyncReport.status === 'pending'
-                          ? `Hay diferencias controladas entre ${excelSyncReport.currentLabel.toLowerCase()} y ${excelSyncReport.referenceLabel.toLowerCase()}.`
-                          : `Hay diferencias estructurales o elementos sin correspondencia entre ${excelSyncReport.currentLabel.toLowerCase()} y ${excelSyncReport.referenceLabel.toLowerCase()}.`
+                      ? excelSyncReport?.status === 'synced'
+                        ? `${excelSyncReport?.currentLabel ?? 'Actual'} y ${excelSyncReport?.referenceLabel ?? 'Referencia'} coinciden hoja por hoja y campo por campo.`
+                        : excelSyncReport?.status === 'pending'
+                          ? `Hay diferencias controladas entre ${(excelSyncReport?.currentLabel ?? 'Actual').toLowerCase()} y ${(excelSyncReport?.referenceLabel ?? 'Referencia').toLowerCase()}.`
+                          : `Hay diferencias estructurales o elementos sin correspondencia entre ${(excelSyncReport?.currentLabel ?? 'Actual').toLowerCase()} y ${(excelSyncReport?.referenceLabel ?? 'Referencia').toLowerCase()}.`
                       : 'Aun no hay una comparacion cargada. Ejecuta la comparacion o importa un Excel para ver el estado real de sincronizacion.'}
                   </p>
 
                   <div className="mt-4 grid gap-3 sm:grid-cols-2">
                     <InlineMetric label="Archivo" value={excelSyncReport?.fileName ?? 'Sin leer'} />
-                    <InlineMetric label="Excel base" value={excelSyncReport ? formatSnapshotDate(excelSyncReport.baseExcelModifiedAt) : 'Sin leer'} />
-                    <InlineMetric label="Comparacion" value={excelSyncReport ? formatSnapshotDate(excelSyncReport.generatedAt) : 'Pendiente'} />
+                    <InlineMetric label="Excel base" value={excelSyncReport?.baseExcelModifiedAt ? formatSnapshotDate(excelSyncReport!.baseExcelModifiedAt) : 'Sin leer'} />
+                    <InlineMetric label="Comparacion" value={excelSyncReport?.generatedAt ? formatSnapshotDate(excelSyncReport!.generatedAt) : 'Pendiente'} />
                     <InlineMetric label="Hojas afectadas" value={String(excelSyncReport?.summary.sheetDifferences ?? 0)} />
                     <InlineMetric label="Items con diferencias" value={String(excelSyncReport?.summary.itemDifferences ?? 0)} />
                     <InlineMetric label="Campos distintos" value={String(excelSyncReport?.summary.fieldDifferences ?? 0)} />
@@ -1604,11 +1612,11 @@ export function AdminMenuEditorView() {
                   </div>
                   {excelSyncReport ? (
                     <div className="mt-4 rounded-[1.2rem] border border-white/10 bg-white/[0.03] p-4 text-xs leading-6 text-mist">
-                      Solo en {excelSyncReport.currentLabel.toLowerCase()}:{' '}
-                      {excelSyncReport.sheetNamesOnlyInSource.length ? excelSyncReport.sheetNamesOnlyInSource.join(', ') : 'Ninguna'}
+                      Solo en {(excelSyncReport?.currentLabel ?? 'Actual').toLowerCase()}:{' '}
+                      {excelSyncReport?.sheetNamesOnlyInSource?.length ? excelSyncReport?.sheetNamesOnlyInSource?.join(', ') : 'Ninguna'}
                       <br />
-                      Solo en {excelSyncReport.referenceLabel.toLowerCase()}:{' '}
-                      {excelSyncReport.sheetNamesOnlyInReference.length ? excelSyncReport.sheetNamesOnlyInReference.join(', ') : 'Ninguna'}
+                      Solo en {(excelSyncReport?.referenceLabel ?? 'Referencia').toLowerCase()}:{' '}
+                      {excelSyncReport?.sheetNamesOnlyInReference?.length ? excelSyncReport?.sheetNamesOnlyInReference?.join(', ') : 'Ninguna'}
                     </div>
                   ) : null}
                 </div>

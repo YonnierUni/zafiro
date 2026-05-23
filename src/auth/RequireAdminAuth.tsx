@@ -9,7 +9,7 @@ export function RequireAdminAuth() {
     return (
       <AuthStateScreen
         title="Admin no disponible"
-        description="Este entorno no tiene Supabase configurado. Define VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY para habilitar el acceso protegido al admin."
+        description="Este entorno no tiene Supabase configurado. Define VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY para habilitar el acceso protegido al backoffice."
       />
     );
   }

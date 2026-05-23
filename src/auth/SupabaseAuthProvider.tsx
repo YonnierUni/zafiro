@@ -2,16 +2,24 @@ import type { PropsWithChildren } from 'react';
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { getSupabaseClient, isSupabaseConfigured } from '../integrations/supabase/client';
+import type { StaffProfile, StaffRole } from '../shared/operations/operations.types';
 
 interface SupabaseAuthContextValue {
   authError: string | null;
   authReady: boolean;
+  canAccessCatalog: boolean;
+  canAccessPos: boolean;
+  hasRole: (role: StaffRole) => boolean;
   isAuthenticated: boolean;
   isAuthorized: boolean;
+  isCatalogAdmin: boolean;
   isConfigured: boolean;
+  isPosStaff: boolean;
   session: Session | null;
   signInWithPassword: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
+  staffProfile: StaffProfile | null;
+  staffRoles: StaffRole[];
   user: User | null;
 }
 
@@ -21,6 +29,9 @@ export function SupabaseAuthProvider({ children }: PropsWithChildren) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [isAuthorized, setIsAuthorized] = useState(false);
+  const [isCatalogAdmin, setIsCatalogAdmin] = useState(false);
+  const [staffProfile, setStaffProfile] = useState<StaffProfile | null>(null);
+  const [staffRoles, setStaffRoles] = useState<StaffRole[]>([]);
   const [authReady, setAuthReady] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const isConfigured = isSupabaseConfigured();
@@ -31,6 +42,9 @@ export function SupabaseAuthProvider({ children }: PropsWithChildren) {
       setSession(null);
       setUser(null);
       setIsAuthorized(false);
+      setIsCatalogAdmin(false);
+      setStaffProfile(null);
+      setStaffRoles([]);
       setAuthError(null);
       return;
     }
@@ -42,25 +56,65 @@ export function SupabaseAuthProvider({ children }: PropsWithChildren) {
       if (!nextUser) {
         if (isMounted) {
           setIsAuthorized(false);
+          setIsCatalogAdmin(false);
+          setStaffProfile(null);
+          setStaffRoles([]);
           setAuthError(null);
         }
         return;
       }
 
-      const { data, error } = await supabase.rpc('is_catalog_admin');
+      const normalizedEmail = nextUser.email?.trim().toLowerCase();
+      const emptyProfileResult = Promise.resolve({ data: null, error: null });
+      const emptyRolesResult = Promise.resolve({ data: [] as { role: StaffRole }[], error: null });
+      const [{ data: catalogAdmin, error: adminError }, { data: profile, error: profileError }, { data: roles, error: rolesError }] =
+        await Promise.all([
+          supabase.rpc('is_catalog_admin'),
+          normalizedEmail
+            ? supabase.from('staff_profiles').select('*').eq('email', normalizedEmail).maybeSingle()
+            : emptyProfileResult,
+          normalizedEmail
+            ? supabase.from('staff_role_assignments').select('role').eq('email', normalizedEmail)
+            : emptyRolesResult,
+        ]);
 
       if (!isMounted) {
         return;
       }
 
-      if (error) {
+      if (adminError || profileError || rolesError) {
         setIsAuthorized(false);
-        setAuthError(`No fue posible validar permisos admin: ${error.message}`);
+        setIsCatalogAdmin(false);
+        setStaffProfile(null);
+        setStaffRoles([]);
+        setAuthError(
+          `No fue posible validar permisos operativos: ${adminError?.message ?? profileError?.message ?? rolesError?.message}`,
+        );
         return;
       }
 
-      setIsAuthorized(Boolean(data));
-      setAuthError(Boolean(data) ? null : 'Tu cuenta no esta autorizada para operar el admin del catalogo.');
+      const nextRoles = Array.from(
+        new Set<StaffRole>([
+          ...(catalogAdmin ? (['superadmin'] as StaffRole[]) : []),
+          ...(roles ?? []).map((entry) => entry.role as StaffRole),
+        ]),
+      );
+      const nextProfile: StaffProfile | null =
+        profile || normalizedEmail
+          ? {
+              email: profile?.email ?? normalizedEmail ?? '',
+              fullName: profile?.full_name ?? normalizedEmail ?? 'Operador',
+              isActive: profile?.is_active ?? true,
+              roles: nextRoles,
+            }
+          : null;
+      const nextAuthorized = Boolean(catalogAdmin) || nextRoles.length > 0;
+
+      setIsCatalogAdmin(Boolean(catalogAdmin));
+      setStaffProfile(nextProfile);
+      setStaffRoles(nextRoles);
+      setIsAuthorized(nextAuthorized);
+      setAuthError(nextAuthorized ? null : 'Tu cuenta no tiene permisos para operar el backoffice de ZAFIRO.');
     };
 
     supabase.auth
@@ -106,9 +160,14 @@ export function SupabaseAuthProvider({ children }: PropsWithChildren) {
     () => ({
       authError,
       authReady,
+      canAccessCatalog: isCatalogAdmin,
+      canAccessPos: isAuthorized,
+      hasRole: (role) => staffRoles.includes(role),
       isAuthenticated: Boolean(session?.user),
       isAuthorized,
+      isCatalogAdmin,
       isConfigured,
+      isPosStaff: isAuthorized,
       session,
       signInWithPassword: async (email, password) => {
         if (!isConfigured) {
@@ -130,9 +189,11 @@ export function SupabaseAuthProvider({ children }: PropsWithChildren) {
         const supabase = getSupabaseClient();
         await supabase.auth.signOut();
       },
+      staffProfile,
+      staffRoles,
       user,
     }),
-    [authError, authReady, isAuthorized, isConfigured, session, user],
+    [authError, authReady, isAuthorized, isCatalogAdmin, isConfigured, session, staffProfile, staffRoles, user],
   );
 
   return <SupabaseAuthContext.Provider value={value}>{children}</SupabaseAuthContext.Provider>;

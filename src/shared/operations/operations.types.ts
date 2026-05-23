@@ -4,186 +4,209 @@ export type TableType = 'fixed' | 'temporary';
 
 export type TableZone = 'salon' | 'bar' | 'terrace' | 'vip' | 'other';
 
-export type StaffRole = 'waiter' | 'cashier' | 'admin';
+export type StaffRole = 'superadmin' | 'waiter' | 'kitchen' | 'bar' | 'cashier';
 
-export interface StaffUser {
-  id: string;
-  name: string;
-  role: StaffRole;
-  isActive: boolean;
-}
+export type PreparationArea = 'kitchen' | 'bar';
 
-export interface Table {
-  id: string;
-  code: string;
-  name: string;
-  type: TableType;
-  zone: TableZone;
-  capacity?: number;
-  status: TableStatus;
-  assignedStaffUserId?: string | null;
-  activeOrderId?: string | null;
-  createdAt?: string;
-  createdByUserId?: string | null;
-  notes?: string;
-}
+export type OrderFinancialStatus = 'pending_payment' | 'partially_paid' | 'paid_total' | 'cancelled';
 
-export type OrderStatus = 'open' | 'partially_paid' | 'paid' | 'cancelled';
-
-export type OrderItemStatus = 'active' | 'cancelled' | 'paid';
-
-export interface OrderItem {
-  id: string;
-  productId?: string | null;
-  productName: string;
-  quantity: number;
-  unitPrice: number;
-  totalPrice: number;
-  status: OrderItemStatus;
-  addedAt: string;
-  addedByUserId: string;
-  cancelledAt?: string | null;
-  cancelledByUserId?: string | null;
-  cancellationReason?: string;
-  notes?: string;
-}
-
-export interface OrderPaymentSummary {
-  subtotal: number;
-  discountAmount?: number;
-  tipAmount?: number;
-  totalDue: number;
-  totalPaid: number;
-  remainingBalance: number;
-}
-
-export interface Order {
-  id: string;
-  tableId: string;
-  status: OrderStatus;
-  openedAt: string;
-  closedAt?: string | null;
-  openedByUserId: string;
-  assignedStaffUserId?: string | null;
-  cashierUserId?: string | null;
-  items: OrderItem[];
-  paymentSummary: OrderPaymentSummary;
-  notes?: string;
-  cancellationReason?: string;
-}
+export type OrderOperationalStatus =
+  | 'draft'
+  | 'sent'
+  | 'pending_preparation'
+  | 'in_process'
+  | 'ready'
+  | 'picking_up'
+  | 'delivered'
+  | 'cancelled';
 
 export type PaymentMethod = 'cash' | 'nequi' | 'bank_transfer' | 'card' | 'other';
 
 export type PaymentStatus = 'pending' | 'confirmed' | 'rejected';
 
-export type PaymentAllocationType = 'amount' | 'items';
+export type PaymentAllocationMode = 'total' | 'amount' | 'percentage' | 'items';
 
-export interface PaymentAllocation {
+export interface StaffProfile {
+  email: string;
+  fullName: string;
+  isActive: boolean;
+  roles: StaffRole[];
+}
+
+export interface PosTable {
   id: string;
-  type: PaymentAllocationType;
-  amount: number;
-  orderItemIds?: string[];
+  code: string;
+  name: string;
+  type: TableType;
+  zone: TableZone;
+  capacity?: number | null;
+  status: TableStatus;
+  assignedStaffEmail?: string | null;
+  activeOrderId?: string | null;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
-export interface CashPaymentDetails {
-  amountDue: number;
-  amountApplied: number;
-  amountReceived: number;
-  changeDue: number;
-}
-
-export interface Payment {
+export interface PosOrderItem {
   id: string;
   orderId: string;
-  amount: number;
+  tableId?: string | null;
+  tableCode?: string | null;
+  tableName?: string | null;
+  menuItemSourceKey?: string | null;
+  productName: string;
+  productSlug: string;
+  prepArea: PreparationArea;
+  quantity: number;
+  unitPrice: number;
+  totalPrice: number;
+  serviceRound: number;
+  orderOpenedByEmail?: string | null;
+  orderAssignedStaffEmail?: string | null;
+  operationalStatus: OrderOperationalStatus;
+  financialStatus: OrderFinancialStatus;
+  notes?: string;
+  replacementForItemId?: string | null;
+  createdAt: string;
+  createdByEmail: string;
+  updatedAt: string;
+  updatedByEmail?: string | null;
+  sentAt?: string | null;
+  preparationStartedAt?: string | null;
+  readyAt?: string | null;
+  pickingUpAt?: string | null;
+  pickingUpByEmail?: string | null;
+  deliveredAt?: string | null;
+  deliveredByEmail?: string | null;
+  cancelledAt?: string | null;
+  cancelledByEmail?: string | null;
+  cancellationReason?: string | null;
+}
+
+export interface PosPayment {
+  id: string;
+  orderId: string;
   method: PaymentMethod;
   status: PaymentStatus;
-  receivedAt: string;
-  receivedByUserId: string;
-  allocations: PaymentAllocation[];
-  amountDue?: number;
-  amountApplied?: number;
-  amountReceived?: number;
-  changeDue?: number;
-  cashDetails?: CashPaymentDetails;
-  tipAmount?: number;
-  reference?: string;
+  allocationMode: PaymentAllocationMode;
+  amountApplied: number;
+  amountReceived?: number | null;
+  changeDue?: number | null;
+  percentageApplied?: number | null;
+  targetItemIds?: string[];
+  reference?: string | null;
+  notes?: string | null;
+  createdAt: string;
+  createdByEmail: string;
   confirmedAt?: string | null;
-  confirmedByUserId?: string | null;
-  notes?: string;
+  confirmedByEmail?: string | null;
+  rejectedAt?: string | null;
+  rejectedByEmail?: string | null;
+  rejectionReason?: string | null;
 }
 
-export interface QuickProductSearchFilters {
-  query?: string;
-  type?: string;
-  subgrupo?: string;
-  onlyVisibleInPublic?: boolean;
-  onlyAvailable?: boolean;
-  onlyFeaturedInPublic?: boolean;
-  onlyVisibleInPos?: boolean;
-  onlyFrequentInPos?: boolean;
+export interface PosOrder {
+  id: string;
+  tableId: string;
+  financialStatus: OrderFinancialStatus;
+  openedAt: string;
+  closedAt?: string | null;
+  openedByEmail: string;
+  assignedStaffEmail?: string | null;
+  cashierEmail?: string | null;
+  notes?: string | null;
+  cancellationReason?: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
-export type PosProductVisibility = 'hidden' | 'visible' | 'frequent';
-
-export interface PosProductShortcut {
-  productId: string;
-  label: string;
-  visibility: PosProductVisibility;
-  priority?: number;
+export interface PosOrderComputedSummary {
+  subtotal: number;
+  totalDue: number;
+  totalPaid: number;
+  remainingBalance: number;
+  pendingPayments: number;
+  confirmedPayments: number;
 }
 
-export interface CashRegisterPaymentBreakdown {
-  method: PaymentMethod;
-  totalAmount: number;
-  paymentCount: number;
-  pendingAmount?: number;
-  confirmedAmount?: number;
-  rejectedAmount?: number;
-}
-
-export interface CashRegisterSummary {
-  expectedCashAmount: number;
-  confirmedPaymentsTotal: number;
-  pendingPaymentsTotal: number;
-  rejectedPaymentsTotal: number;
-  paymentBreakdown: CashRegisterPaymentBreakdown[];
-}
-
-export type OrderAuditEventType =
-  | 'table_created'
-  | 'table_updated'
-  | 'order_opened'
-  | 'order_item_added'
-  | 'order_item_cancelled'
-  | 'payment_created'
-  | 'payment_confirmed'
-  | 'payment_rejected'
-  | 'order_closed'
-  | 'order_cancelled';
-
-export interface OrderAuditEvent {
+export interface PosOrderStatusLog {
   id: string;
   orderId?: string | null;
+  orderItemId?: string | null;
   tableId?: string | null;
-  type: OrderAuditEventType;
+  eventType: string;
+  actorEmail: string;
+  actorRole?: StaffRole | null;
   createdAt: string;
-  createdByUserId: string;
-  payload?: Record<string, unknown>;
-  notes?: string;
+  beforeData?: Record<string, unknown> | null;
+  afterData?: Record<string, unknown> | null;
+  notes?: string | null;
 }
 
-export type CashRegisterStatus = 'open' | 'closed';
+export interface PosOrderWithRelations extends PosOrder {
+  items: PosOrderItem[];
+  payments: PosPayment[];
+  summary: PosOrderComputedSummary;
+}
 
-export interface CashRegisterSession {
+export interface PosTableWithOrder extends PosTable {
+  activeOrder: PosOrderWithRelations | null;
+}
+
+export interface PosState {
+  generatedAt: string;
+  roles: StaffRole[];
+  staffProfile: StaffProfile | null;
+  tables: PosTableWithOrder[];
+  openOrders: PosOrderWithRelations[];
+  pendingPreparationKitchen: PosOrderItem[];
+  pendingPreparationBar: PosOrderItem[];
+  pendingPayments: PosPayment[];
+  logs: PosOrderStatusLog[];
+}
+
+export interface PosProductOption {
   id: string;
-  status: CashRegisterStatus;
-  openedAt: string;
-  openedByUserId: string;
-  closedAt?: string | null;
-  closedByUserId?: string | null;
-  openingAmount?: number;
-  closingAmount?: number;
-  summary?: CashRegisterSummary;
+  slug: string;
+  sourceKey: string;
+  type: string;
+  subgrupo: string;
+  name: string;
+  price: number;
+  available: boolean;
+}
+
+export interface CreatePosTableInput {
+  capacity?: number | null;
+  code: string;
+  name: string;
   notes?: string;
+  type: TableType;
+  zone: TableZone;
+}
+
+export interface AddOrderItemInput {
+  menuItemSourceKey: string;
+  notes?: string;
+  productName: string;
+  productSlug: string;
+  productType: string;
+  quantity: number;
+  unitPrice: number;
+}
+
+export interface UpdateOrderItemInput {
+  notes?: string;
+  quantity?: number;
+}
+
+export interface RecordPaymentInput {
+  amount?: number;
+  amountReceived?: number;
+  method: PaymentMethod;
+  notes?: string;
+  percentage?: number;
+  reference?: string;
+  targetItemIds?: string[];
 }

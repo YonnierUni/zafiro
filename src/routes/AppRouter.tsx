@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { RequireAdminAuth } from '../auth/RequireAdminAuth';
+import { RequireCatalogAdminAuth } from '../auth/RequireCatalogAdminAuth';
 import { AdminLoginView } from '../admin/AdminLoginView';
 import { AdminMenuView } from '../admin/AdminMenuView';
 import { AdminPosView } from '../admin/AdminPosView';
@@ -13,8 +14,10 @@ export function AppRouter() {
       <Route path="/admin/login" element={<AdminLoginView />} />
       <Route element={<RequireAdminAuth />}>
         <Route path="/admin" element={<AdminView />} />
-        <Route path="/admin/menu" element={<AdminMenuView />} />
         <Route path="/admin/pos" element={<AdminPosView />} />
+      </Route>
+      <Route element={<RequireCatalogAdminAuth />}>
+        <Route path="/admin/menu" element={<AdminMenuView />} />
       </Route>
       <Route path="/" element={<HomeView />} />
       <Route path="/menu" element={<MenuView />} />

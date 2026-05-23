@@ -47,17 +47,22 @@ export function AdminLoginView() {
           <section className="max-w-3xl">
             <p className="text-[0.72rem] uppercase tracking-[0.28em] text-cyanGlow/80">Acceso protegido</p>
             <h1 className="mt-5 font-display text-[2.8rem] leading-none text-ivory sm:text-[4rem]">
-              Admin del catalogo
+              Backoffice operativo
             </h1>
             <p className="mt-6 text-base leading-8 text-mist sm:text-lg">
-              El menu publico sigue abierto para todos, pero la edicion real del catalogo ya requiere autenticacion y permisos
-              de operador dentro de Supabase.
+              El menu publico sigue abierto para todos, pero las operaciones internas de ZAFIRO ahora requieren autenticacion y
+              permisos activos dentro de Supabase.
             </p>
             <div className="mt-8 rounded-[1.6rem] border border-white/10 bg-white/[0.03] p-5">
               <p className="text-[0.68rem] uppercase tracking-[0.24em] text-cyanGlow/80">Estado actual</p>
               <p className="mt-3 text-sm leading-7 text-mist">
                 {isConfigured
                   ? 'Supabase esta configurado. Inicia sesion con una cuenta autorizada para entrar al admin.'
+                  : 'Supabase no esta configurado en este entorno. Primero debes definir VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY.'}
+              </p>
+              <p className="mt-3 text-sm leading-7 text-mist">
+                {isConfigured
+                  ? 'Una cuenta puede tener acceso al catalogo, al POS o a ambos, segun sus roles operativos.'
                   : 'Supabase no esta configurado en este entorno. Primero debes definir VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY.'}
               </p>
               {state.denied ? (
@@ -84,7 +89,7 @@ export function AdminLoginView() {
                 <p className="font-semibold text-ivory">Sesion iniciada, pero sin permisos admin</p>
                 <p className="mt-3 text-sm leading-7 text-mist">
                   Iniciaste sesion como <span className="text-ivory">{user?.email ?? 'usuario desconocido'}</span>, pero esta cuenta
-                  no esta en la allowlist del catalogo.
+                  no tiene roles activos ni permisos de backoffice.
                 </p>
                 <button
                   type="button"

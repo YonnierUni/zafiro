@@ -143,8 +143,9 @@ export function AdminMenuEditorPanel({
             <FormField error={fieldError('precioVenta')} label="Precio venta" changed={fieldChanged('precioVenta')}>
               <input
                 value={item.precioVenta}
-                onChange={(event) => onChange('precioVenta', event.target.value)}
+                onChange={(event) => onChange('precioVenta', sanitizeDigitsInput(event.target.value))}
                 inputMode="numeric"
+                pattern="[0-9]*"
                 placeholder="21000"
                 className={getInputClassName(fieldChanged('precioVenta'), Boolean(fieldError('precioVenta')))}
               />
@@ -166,8 +167,9 @@ export function AdminMenuEditorPanel({
             <FormField error={fieldError('orden')} label="Orden" changed={fieldChanged('orden')}>
               <input
                 value={item.orden}
-                onChange={(event) => onChange('orden', event.target.value)}
+                onChange={(event) => onChange('orden', sanitizeDigitsInput(event.target.value))}
                 inputMode="numeric"
+                pattern="[0-9]*"
                 className={getInputClassName(fieldChanged('orden'), Boolean(fieldError('orden')))}
               />
             </FormField>
@@ -346,4 +348,8 @@ function getInputClassName(changed: boolean, hasError: boolean) {
   }
 
   return 'w-full rounded-2xl border border-white/10 bg-obsidian/55 px-4 py-3 text-sm text-ivory outline-none transition placeholder:text-mist/55 focus:border-cyanGlow/35';
+}
+
+function sanitizeDigitsInput(value: string) {
+  return value.replace(/[^\d]/g, '');
 }

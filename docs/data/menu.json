@@ -1,6 +1,6 @@
 {
-  "updatedAt": "2026-05-18T07:57:10.174Z",
-  "count": 109,
+  "updatedAt": "2026-05-23T01:50:10.651Z",
+  "count": 110,
   "items": [
     {
       "id": 1,
@@ -322,8 +322,8 @@
       "precioVenta": 17000,
       "imagen": "images/menu/comida/18-papas-zafiro.jpeg",
       "hojaOrigen": "Comida",
-      "visible": true,
-      "disponible": true,
+      "visible": false,
+      "disponible": false,
       "destacado": false
     },
     {
@@ -414,6 +414,24 @@
       "hojaOrigen": "Comida",
       "visible": false,
       "disponible": false,
+      "destacado": false
+    },
+    {
+      "id": 24,
+      "orden": 23,
+      "slug": "papas-corte-zafiro",
+      "name": "Papas Corte Zafiro",
+      "description": "Papas a la francesa, salchicha artesanal, tocineta glaseada crujiente sobre base de lechuga fresca. Acompañado de nuestras salsas de la casa.",
+      "tipo": "comida",
+      "subgrupo": "Para compartir",
+      "ingredientes": "",
+      "preparacion": "",
+      "emplatado": "",
+      "precioVenta": 25000,
+      "imagen": "images/menu/comida/24-papas-corte-zafiro.jpeg",
+      "hojaOrigen": "Comida",
+      "visible": true,
+      "disponible": true,
       "destacado": false
     },
     {

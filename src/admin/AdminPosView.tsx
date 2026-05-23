@@ -169,6 +169,7 @@ export function AdminPosView() {
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const realtimeTimerRef = useRef<number | null>(null);
   const trailingSyncTimerRef = useRef<number | null>(null);
+  const hiddenSyncTimestampRef = useRef(0);
   const suppressAutoSyncUntilRef = useRef(0);
   const loadStateRef = useRef<(initial?: boolean) => Promise<void>>(async () => {});
   const historicalSessionHeaderRefs = useRef<Record<string, HTMLButtonElement | null>>({});
@@ -296,13 +297,12 @@ export function AdminPosView() {
         return;
       }
 
-      const currentTab = activeTabRef.current;
       const access = workspaceAccessRef.current;
       const shouldNotify =
-        (realtimeSignal.target === 'kitchen' && currentTab === 'kitchen' && access.canOperateKitchen) ||
-        (realtimeSignal.target === 'bar' && currentTab === 'bar' && access.canOperateBar) ||
-        (realtimeSignal.target === 'floor' && currentTab === 'floor' && access.canOperateFloor) ||
-        (realtimeSignal.target === 'cashier' && currentTab === 'cashier' && access.canOperateCashier);
+        (realtimeSignal.target === 'kitchen' && access.canOperateKitchen) ||
+        (realtimeSignal.target === 'bar' && access.canOperateBar) ||
+        (realtimeSignal.target === 'floor' && access.canOperateFloor) ||
+        (realtimeSignal.target === 'cashier' && access.canOperateCashier);
 
       if (!shouldNotify) {
         return;
@@ -405,12 +405,17 @@ export function AdminPosView() {
     }
 
     const intervalId = window.setInterval(() => {
-      if (document.visibilityState !== 'visible') {
+      if (shouldSuppressBackgroundSync()) {
         return;
       }
 
-      if (shouldSuppressBackgroundSync()) {
-        return;
+      if (document.visibilityState !== 'visible') {
+        const now = Date.now();
+        if (now - hiddenSyncTimestampRef.current < 15_000) {
+          return;
+        }
+
+        hiddenSyncTimestampRef.current = now;
       }
 
       void loadStateRef.current(false);
@@ -469,6 +474,24 @@ export function AdminPosView() {
     () => cashierTables.find((table) => table.id === selectedTableId) ?? cashierTables[0] ?? null,
     [cashierTables, selectedTableId],
   );
+  const floorTables = useMemo(() => {
+    const tables = posState?.tables ?? [];
+
+    return tables
+      .map((table, index) => ({
+        hasReadyItems: (table.activeOrder?.items.some((item) => item.operationalStatus === 'ready') ?? false),
+        index,
+        table,
+      }))
+      .sort((left, right) => {
+        if (left.hasReadyItems !== right.hasReadyItems) {
+          return left.hasReadyItems ? -1 : 1;
+        }
+
+        return left.index - right.index;
+      })
+      .map((entry) => entry.table);
+  }, [posState?.tables]);
   const selectedCashierOrder = selectedCashierTable?.activeOrder ?? null;
   const outstandingByItem = useMemo(() => buildOutstandingByItem(selectedCashierOrder), [selectedCashierOrder]);
   const selectablePaymentUnits = useMemo(
@@ -1398,7 +1421,7 @@ export function AdminPosView() {
           <div className="space-y-5">
             <Panel title="Mesas vivas" subtitle="Selecciona una mesa para operar la cuenta">
               <div className="space-y-3">
-                {posState?.tables.map((table) => {
+                {floorTables.map((table) => {
                   const readyCount = table.activeOrder?.items.filter((item) => item.operationalStatus === 'ready').length ?? 0;
                   const pickingUpCount = table.activeOrder?.items.filter((item) => item.operationalStatus === 'picking_up').length ?? 0;
                   const inPreparationCount =
@@ -2559,6 +2582,16 @@ function resolveRealtimeSignal(event: PosRealtimeEvent, state: PosState | null, 
         dedupeKey: `item:${itemId}:ready`,
         target: 'floor',
         title: 'Producto listo para recoger',
+        tone: 'ready',
+      };
+    }
+
+    if (newStatus === 'picking_up') {
+      return {
+        body: `${itemSummary}${suffix}`,
+        dedupeKey: `item:${itemId}:picking_up`,
+        target: 'floor',
+        title: 'Producto en recogida',
         tone: 'ready',
       };
     }

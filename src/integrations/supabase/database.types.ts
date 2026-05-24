@@ -401,6 +401,13 @@ export interface Database {
         Args: Record<PropertyKey, never>;
         Returns: boolean;
       };
+      move_pos_active_order_to_table: {
+        Args: {
+          destination_table_id: string;
+          source_table_id: string;
+        };
+        Returns: Record<string, unknown>;
+      };
     };
   };
 }

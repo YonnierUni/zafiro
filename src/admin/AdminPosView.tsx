@@ -29,11 +29,13 @@ import {
   loadPosStateFromSupabase,
   markOrderItemDeliveredInSupabase,
   markOrderItemPickingUpInSupabase,
+  moveActiveOrderToTableInSupabase,
   openSalesSessionInSupabase,
   recordPosPaymentInSupabase,
   replaceOrderItemInSupabase,
   sendDraftItemsToPreparationInSupabase,
   subscribeToPosRealtime,
+  type MovePosActiveOrderResult,
   transitionPreparationItemInSupabase,
   updateOrderItemInSupabase,
   updatePosPaymentStatusInSupabase,
@@ -139,6 +141,8 @@ export function AdminPosView() {
   const [products, setProducts] = useState<PosProductOption[]>([]);
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
   const [isTableSheetOpen, setIsTableSheetOpen] = useState(false);
+  const [isMoveTableModalOpen, setIsMoveTableModalOpen] = useState(false);
+  const [moveDestinationTableId, setMoveDestinationTableId] = useState('');
   const [productSearch, setProductSearch] = useState('');
   const [selectedProductSourceKey, setSelectedProductSourceKey] = useState('');
   const [lineQuantity, setLineQuantity] = useState('1');
@@ -492,6 +496,17 @@ export function AdminPosView() {
       })
       .map((entry) => entry.table);
   }, [posState?.tables]);
+  const availableMoveDestinationTables = useMemo(
+    () =>
+      (posState?.tables ?? []).filter(
+        (table) =>
+          table.id !== selectedTable?.id &&
+          table.status === 'available' &&
+          !table.activeOrder &&
+          !table.activeOrderId,
+      ),
+    [posState?.tables, selectedTable?.id],
+  );
   const selectedCashierOrder = selectedCashierTable?.activeOrder ?? null;
   const outstandingByItem = useMemo(() => buildOutstandingByItem(selectedCashierOrder), [selectedCashierOrder]);
   const selectablePaymentUnits = useMemo(
@@ -499,6 +514,7 @@ export function AdminPosView() {
     [outstandingByItem, selectedCashierOrder],
   );
   const canDeleteSelectedTable = Boolean(selectedTable && !selectedTable.activeOrder && !selectedTable.activeOrderId && selectedTable.status !== 'occupied');
+  const canMoveSelectedOrder = Boolean(selectedTable?.activeOrder && (actor.roles.includes('superadmin') || actor.roles.includes('waiter')));
   const createTableName = createTableForm.name.trim();
   const createTableCode = createTableForm.code.trim().toUpperCase();
   const canCreateTable = Boolean(createTableName && createTableCode && isCapacityValid && !busyAction);
@@ -775,6 +791,17 @@ export function AdminPosView() {
     setErrorMessage(null);
   }, [paymentAmount, paymentMethod, paymentMode, paymentNotes, paymentPercentage, paymentReceived, paymentReference, selectedPaymentItemIds, selectedTableId]);
 
+  useEffect(() => {
+    if (!isMoveTableModalOpen) {
+      return;
+    }
+
+    const currentDestinationStillAvailable = availableMoveDestinationTables.some((table) => table.id === moveDestinationTableId);
+    if (!currentDestinationStillAvailable) {
+      setMoveDestinationTableId(availableMoveDestinationTables[0]?.id ?? '');
+    }
+  }, [availableMoveDestinationTables, isMoveTableModalOpen, moveDestinationTableId]);
+
   const executeAction = async <T,>(
     label: string,
     action: () => Promise<T>,
@@ -857,6 +884,54 @@ export function AdminPosView() {
         setIsTableSheetOpen(false);
       },
     });
+  };
+
+  const handleOpenMoveTableModal = () => {
+    if (!selectedTable?.activeOrder) {
+      setErrorMessage('Selecciona una mesa con cuenta activa para trasladarla.');
+      return;
+    }
+
+    if (!canMoveSelectedOrder) {
+      setErrorMessage('Tu rol actual no puede mover cuentas entre mesas.');
+      return;
+    }
+
+    const firstDestination = availableMoveDestinationTables[0];
+    if (!firstDestination) {
+      setErrorMessage('No hay mesas disponibles para recibir esta cuenta.');
+      return;
+    }
+
+    setMoveDestinationTableId(firstDestination.id);
+    setIsMoveTableModalOpen(true);
+  };
+
+  const handleMoveSelectedOrder = async () => {
+    if (!selectedTable?.activeOrder || !moveDestinationTableId) {
+      setErrorMessage('Selecciona una cuenta origen y una mesa destino disponible.');
+      return;
+    }
+
+    const destinationTable = availableMoveDestinationTables.find((table) => table.id === moveDestinationTableId);
+    if (!destinationTable) {
+      setErrorMessage('La mesa destino ya no esta disponible. Actualiza la seleccion.');
+      return;
+    }
+
+    await executeAction(
+      `Cuenta movida de ${selectedTable.code} a ${destinationTable.code}`,
+      async () => moveActiveOrderToTableInSupabase(selectedTable.id, destinationTable.id, actor),
+      {
+        onSuccess: (result) => {
+          setPosState((current) => (current ? mergeMovedOrderIntoPosState(current, result) : current));
+          setSelectedTableId(result.destinationTable.id);
+          setIsMoveTableModalOpen(false);
+          setMoveDestinationTableId('');
+          setIsTableSheetOpen(false);
+        },
+      },
+    );
   };
 
   const handleAddOrReplaceItem = async () => {
@@ -1148,6 +1223,15 @@ export function AdminPosView() {
               <SummaryPill label="Estado" value={tableStatusLabels[selectedTable.status]} />
               <SummaryPill label="Cuenta" value={selectedOrder ? formatCurrency(selectedOrder.summary.totalDue) : formatCurrency(0)} />
               <SummaryPill label="Saldo" value={selectedOrder ? formatCurrency(selectedOrder.summary.remainingBalance) : formatCurrency(0)} />
+            </div>
+          ) : null}
+
+          {selectedOrder ? (
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <button type="button" onClick={handleOpenMoveTableModal} disabled={!canMoveSelectedOrder || Boolean(busyAction)} className={ghostButtonClassName}>
+                Mover mesa
+              </button>
+              <p className="text-sm text-mist">Traslada la cuenta completa a una mesa disponible.</p>
             </div>
           ) : null}
 
@@ -1570,6 +1654,15 @@ export function AdminPosView() {
                     <SummaryPill label="Saldo" value={selectedOrder ? formatCurrency(selectedOrder.summary.remainingBalance) : formatCurrency(0)} />
                   </div>
 
+                  {selectedOrder ? (
+                    <div className="mt-4 flex flex-wrap items-center gap-3">
+                      <button type="button" onClick={handleOpenMoveTableModal} disabled={!canMoveSelectedOrder || Boolean(busyAction)} className={ghostButtonClassName}>
+                        Mover mesa
+                      </button>
+                      <p className="text-sm text-mist">Traslada la cuenta completa a una mesa disponible.</p>
+                    </div>
+                  ) : null}
+
                   <div className="mt-5 rounded-[1.2rem] border border-white/8 bg-black/15 p-4">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
@@ -1763,6 +1856,59 @@ export function AdminPosView() {
                   </button>
                 </div>
                 {renderSelectedTableWorkspace()}
+              </div>
+            </div>
+          ) : null}
+
+          {isMoveTableModalOpen && selectedTable?.activeOrder ? (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/72 px-4">
+              <div className="w-full max-w-lg rounded-[1.4rem] border border-white/10 bg-[#0b0b0f] p-5 shadow-[0_18px_60px_rgba(0,0,0,0.45)]">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-[0.68rem] uppercase tracking-[0.22em] text-cyanGlow/80">Trasladar cuenta</p>
+                    <h2 className="mt-2 font-display text-2xl text-ivory">
+                      {selectedTable.name} · {selectedTable.code}
+                    </h2>
+                    <p className="mt-2 text-sm text-mist">
+                      Se mueve la orden activa completa con productos, pagos, saldo, observaciones y jornada.
+                    </p>
+                  </div>
+                  <button type="button" onClick={() => setIsMoveTableModalOpen(false)} className={ghostButtonClassName}>
+                    Cerrar
+                  </button>
+                </div>
+
+                <div className="mt-5 grid gap-3">
+                  <SummaryPill label="Cuenta actual" value={formatCurrency(selectedTable.activeOrder.summary.totalDue)} />
+                  <SummaryPill label="Saldo pendiente" value={formatCurrency(selectedTable.activeOrder.summary.remainingBalance)} />
+                  <Field label="Mesa destino">
+                    <select value={moveDestinationTableId} onChange={(event) => setMoveDestinationTableId(event.target.value)} className={inputClassName}>
+                      {availableMoveDestinationTables.map((table) => (
+                        <option key={table.id} value={table.id}>
+                          {table.name} · {table.code}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                </div>
+
+                {!availableMoveDestinationTables.length ? (
+                  <p className="mt-4 text-sm text-rose-100">No hay mesas libres para recibir esta cuenta.</p>
+                ) : null}
+
+                <div className="mt-5 flex flex-wrap justify-end gap-3">
+                  <button type="button" onClick={() => setIsMoveTableModalOpen(false)} className={ghostButtonClassName}>
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleMoveSelectedOrder()}
+                    disabled={!moveDestinationTableId || Boolean(busyAction)}
+                    className={primaryButtonClassName}
+                  >
+                    Confirmar traslado
+                  </button>
+                </div>
               </div>
             </div>
           ) : null}
@@ -2455,6 +2601,97 @@ interface RealtimeSignal {
 }
 
 function applyRealtimeEventToPosState(state: PosState, event: PosRealtimeEvent) {
+  if (event.table === 'pos_tables' && event.newRecord) {
+    const record = event.newRecord;
+    const tableId = asString(record.id);
+    if (!tableId) {
+      return state;
+    }
+
+    const activeOrderId = asNullableString(record.active_order_id);
+    const tables = state.tables.map((table) => {
+      if (table.id !== tableId) {
+        return table;
+      }
+
+      const activeOrder =
+        activeOrderId && table.activeOrder?.id !== activeOrderId
+          ? state.openOrders.find((order) => order.id === activeOrderId) ?? null
+          : activeOrderId
+            ? table.activeOrder
+            : null;
+
+      return {
+        ...table,
+        activeOrder,
+        activeOrderId,
+        assignedStaffEmail: asNullableString(record.assigned_staff_email),
+        capacity: asNumber(record.capacity) ?? table.capacity ?? null,
+        code: asString(record.code) || table.code,
+        name: asString(record.name) || table.name,
+        notes: asString(record.notes) || table.notes,
+        status: (asString(record.status) as PosTable['status']) || table.status,
+        type: (asString(record.type) as PosTable['type']) || table.type,
+        updatedAt: asString(record.updated_at) || table.updatedAt,
+        zone: (asString(record.zone) as PosTable['zone']) || table.zone,
+      };
+    });
+
+    return rebuildDerivedStateFromTables(state, tables);
+  }
+
+  if (event.table === 'pos_orders' && event.newRecord) {
+    const orderId = asString(event.newRecord.id);
+    const destinationTableId = asString(event.newRecord.table_id);
+    if (!orderId || !destinationTableId) {
+      return state;
+    }
+
+    const existingOrder = state.openOrders.find((order) => order.id === orderId) ?? state.closedSales.find((order) => order.id === orderId);
+    if (!existingOrder) {
+      return state;
+    }
+
+    const updatedOrder = {
+      ...existingOrder,
+      assignedStaffEmail: asNullableString(event.newRecord.assigned_staff_email) ?? existingOrder.assignedStaffEmail ?? null,
+      cancellationReason: asNullableString(event.newRecord.cancellation_reason) ?? existingOrder.cancellationReason ?? null,
+      cashierEmail: asNullableString(event.newRecord.cashier_email) ?? existingOrder.cashierEmail ?? null,
+      closedAt: asNullableString(event.newRecord.closed_at),
+      financialStatus: (asString(event.newRecord.financial_status) as PosOrderWithRelations['financialStatus']) || existingOrder.financialStatus,
+      notes: asNullableString(event.newRecord.notes) ?? existingOrder.notes ?? '',
+      salesSessionId: asNullableString(event.newRecord.sales_session_id) ?? existingOrder.salesSessionId ?? null,
+      tableId: destinationTableId,
+      updatedAt: asString(event.newRecord.updated_at) || existingOrder.updatedAt,
+    };
+
+    const tables = state.tables.map((table) => {
+      if (table.id === destinationTableId) {
+        return {
+          ...table,
+          activeOrder: updatedOrder,
+          activeOrderId: orderId,
+          assignedStaffEmail: updatedOrder.assignedStaffEmail ?? table.assignedStaffEmail,
+          status: 'occupied' as const,
+        };
+      }
+
+      if (table.activeOrder?.id === orderId || table.activeOrderId === orderId) {
+        return {
+          ...table,
+          activeOrder: null,
+          activeOrderId: null,
+          assignedStaffEmail: null,
+          status: 'available' as const,
+        };
+      }
+
+      return table;
+    });
+
+    return rebuildDerivedStateFromTables(state, tables);
+  }
+
   if (event.table === 'pos_order_items' && event.newRecord) {
     const itemId = asString(event.newRecord.id);
     if (!itemId) {
@@ -3040,6 +3277,57 @@ function insertTableIntoPosState(state: PosState, createdTable: PosTable) {
 
 function removeTableFromPosState(state: PosState, tableId: string) {
   const tables = state.tables.filter((table) => table.id !== tableId);
+  return rebuildDerivedStateFromTables(state, tables);
+}
+
+function mergeMovedOrderIntoPosState(state: PosState, result: MovePosActiveOrderResult) {
+  const existingOrder =
+    state.openOrders.find((order) => order.id === result.order.id) ??
+    state.closedSales.find((order) => order.id === result.order.id) ??
+    state.tables.flatMap((table) => (table.activeOrder ? [table.activeOrder] : [])).find((order) => order.id === result.order.id) ??
+    null;
+
+  const movedOrder = existingOrder
+    ? {
+        ...existingOrder,
+        ...result.order,
+        items: existingOrder.items,
+        payments: existingOrder.payments,
+        summary: existingOrder.summary,
+        tableId: result.destinationTable.id,
+      }
+    : null;
+
+  const tables = state.tables.map((table) => {
+    if (table.id === result.sourceTable.id) {
+      return {
+        ...table,
+        ...result.sourceTable,
+        activeOrder: null,
+      };
+    }
+
+    if (table.id === result.destinationTable.id) {
+      return {
+        ...table,
+        ...result.destinationTable,
+        activeOrder: movedOrder,
+      };
+    }
+
+    if (table.activeOrder?.id === result.order.id || table.activeOrderId === result.order.id) {
+      return {
+        ...table,
+        activeOrder: null,
+        activeOrderId: null,
+        assignedStaffEmail: null,
+        status: 'available' as const,
+      };
+    }
+
+    return table;
+  });
+
   return rebuildDerivedStateFromTables(state, tables);
 }
 

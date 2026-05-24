@@ -220,6 +220,155 @@ create index if not exists pos_order_status_logs_order_idx on public.pos_order_s
 create index if not exists pos_order_status_logs_item_idx on public.pos_order_status_logs(order_item_id);
 create index if not exists pos_order_status_logs_created_idx on public.pos_order_status_logs(created_at desc);
 
+create or replace function public.move_pos_active_order_to_table(
+  source_table_id uuid,
+  destination_table_id uuid
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  actor_email text := lower(coalesce(auth.jwt() ->> 'email', ''));
+  actor_role text;
+  source_table public.pos_tables%rowtype;
+  destination_table public.pos_tables%rowtype;
+  active_order public.pos_orders%rowtype;
+  moved_at timestamptz := timezone('utc', now());
+  before_payload jsonb;
+  after_payload jsonb;
+begin
+  if actor_email = '' then
+    raise exception 'No hay una sesion operativa valida para mover cuentas.';
+  end if;
+
+  if not (public.is_catalog_admin() or public.has_staff_role('waiter')) then
+    raise exception 'Tu rol actual no puede mover cuentas entre mesas.';
+  end if;
+
+  if source_table_id = destination_table_id then
+    raise exception 'Selecciona una mesa destino diferente a la mesa origen.';
+  end if;
+
+  perform 1
+  from public.pos_tables
+  where id in (source_table_id, destination_table_id)
+  order by id
+  for update;
+
+  select *
+  into source_table
+  from public.pos_tables
+  where id = source_table_id;
+
+  if not found then
+    raise exception 'No se encontro la mesa origen.';
+  end if;
+
+  select *
+  into destination_table
+  from public.pos_tables
+  where id = destination_table_id;
+
+  if not found then
+    raise exception 'No se encontro la mesa destino.';
+  end if;
+
+  if source_table.active_order_id is null then
+    raise exception 'La mesa origen no tiene una cuenta activa para trasladar.';
+  end if;
+
+  select *
+  into active_order
+  from public.pos_orders
+  where id = source_table.active_order_id
+  for update;
+
+  if not found then
+    raise exception 'No se encontro la orden activa asociada a la mesa origen.';
+  end if;
+
+  if active_order.closed_at is not null then
+    raise exception 'No puedes mover una cuenta que ya esta cerrada.';
+  end if;
+
+  if active_order.table_id <> source_table.id then
+    raise exception 'La cuenta activa no coincide con la mesa origen. Actualiza el POS e intenta de nuevo.';
+  end if;
+
+  if destination_table.status <> 'available' or destination_table.active_order_id is not null then
+    raise exception 'La mesa destino no esta disponible. La fusion de mesas aun no esta habilitada.';
+  end if;
+
+  before_payload := jsonb_build_object(
+    'movedAt', moved_at,
+    'sourceTable', to_jsonb(source_table),
+    'destinationTable', to_jsonb(destination_table),
+    'order', to_jsonb(active_order)
+  );
+
+  update public.pos_orders
+  set
+    table_id = destination_table.id,
+    assigned_staff_email = actor_email
+  where id = active_order.id
+  returning * into active_order;
+
+  update public.pos_tables
+  set
+    active_order_id = null,
+    assigned_staff_email = null,
+    status = 'available'
+  where id = source_table.id
+  returning * into source_table;
+
+  update public.pos_tables
+  set
+    active_order_id = active_order.id,
+    assigned_staff_email = actor_email,
+    status = 'occupied'
+  where id = destination_table.id
+  returning * into destination_table;
+
+  actor_role := case
+    when public.is_catalog_admin() then 'superadmin'
+    when public.has_staff_role('waiter') then 'waiter'
+    else null
+  end;
+
+  after_payload := jsonb_build_object(
+    'movedAt', moved_at,
+    'sourceTable', to_jsonb(source_table),
+    'destinationTable', to_jsonb(destination_table),
+    'order', to_jsonb(active_order)
+  );
+
+  insert into public.pos_order_status_logs (
+    actor_email,
+    actor_role,
+    after_data,
+    before_data,
+    event_type,
+    notes,
+    order_id,
+    table_id
+  )
+  values (
+    actor_email,
+    actor_role,
+    after_payload,
+    before_payload,
+    'table_account_moved',
+    'Cuenta trasladada de ' || source_table.code || ' a ' || destination_table.code,
+    active_order.id,
+    destination_table.id
+  );
+
+  return after_payload;
+end;
+$$;
+
 alter table public.staff_profiles enable row level security;
 alter table public.staff_role_assignments enable row level security;
 alter table public.pos_tables enable row level security;
@@ -311,3 +460,4 @@ grant select, insert, update on public.pos_order_items to authenticated;
 grant select, insert, update on public.pos_payments to authenticated;
 grant select, insert, update on public.pos_sales_sessions to authenticated;
 grant select, insert, update on public.pos_order_status_logs to authenticated;
+grant execute on function public.move_pos_active_order_to_table(uuid, uuid) to authenticated;

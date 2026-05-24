@@ -52,6 +52,12 @@ export interface UpdatePaymentStatusInput {
   status: Extract<PaymentStatus, 'confirmed' | 'rejected'>;
 }
 
+export interface MovePosActiveOrderResult {
+  destinationTable: PosTable;
+  order: PosOrder;
+  sourceTable: PosTable;
+}
+
 const TERMINAL_ITEM_STATUSES = new Set<OrderOperationalStatus>(['delivered', 'cancelled']);
 const DRAFT_EDITABLE_STATUSES = new Set<OrderOperationalStatus>(['draft']);
 const CONTROLLED_CANCEL_STATUSES = new Set<OrderOperationalStatus>(['draft', 'sent', 'pending_preparation']);
@@ -261,6 +267,38 @@ export async function deletePosTableInSupabase(tableId: string, actor: PosActorC
     eventType: 'table_deleted',
     notes: `Mesa ${table.code} eliminada`,
   });
+}
+
+export async function moveActiveOrderToTableInSupabase(sourceTableId: string, destinationTableId: string, actor: PosActorContext) {
+  ensureCanMoveActiveOrder(actor.roles);
+
+  if (sourceTableId === destinationTableId) {
+    throw new Error('Selecciona una mesa destino diferente a la mesa origen.');
+  }
+
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.rpc('move_pos_active_order_to_table', {
+    destination_table_id: destinationTableId,
+    source_table_id: sourceTableId,
+  });
+
+  throwIfError(error, 'No fue posible trasladar la cuenta');
+
+  const payload = data as {
+    destinationTable?: PosTableRow;
+    order?: PosOrderRow;
+    sourceTable?: PosTableRow;
+  } | null;
+
+  if (!payload?.sourceTable || !payload.destinationTable || !payload.order) {
+    throw new Error('El traslado se completo, pero la respuesta de Supabase vino incompleta. Actualiza el POS para sincronizar.');
+  }
+
+  return {
+    destinationTable: mapPosTableRow(payload.destinationTable),
+    order: mapPosOrderRow(payload.order),
+    sourceTable: mapPosTableRow(payload.sourceTable),
+  };
 }
 
 export async function addItemsToTableInSupabase(tableId: string, items: AddOrderItemInput[], actor: PosActorContext) {
@@ -1244,6 +1282,14 @@ function ensurePreparationPermission(item: PosOrderItem, roles: StaffRole[]) {
   }
 
   throw new Error('Tu rol actual no puede operar esta cola de preparacion.');
+}
+
+function ensureCanMoveActiveOrder(roles: StaffRole[]) {
+  if (roles.includes('superadmin') || roles.includes('waiter')) {
+    return;
+  }
+
+  throw new Error('Tu rol actual no puede mover cuentas entre mesas.');
 }
 
 function derivePreparationAreaFromProductType(productType: string): PreparationArea {

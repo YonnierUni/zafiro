@@ -147,6 +147,7 @@ export function AdminPosView() {
   const [isTableSheetOpen, setIsTableSheetOpen] = useState(false);
   const [isCloseDraftWarningOpen, setIsCloseDraftWarningOpen] = useState(false);
   const [isMoveTableModalOpen, setIsMoveTableModalOpen] = useState(false);
+  const [isMetricsCompactOpen, setIsMetricsCompactOpen] = useState(false);
   const [moveDestinationTableId, setMoveDestinationTableId] = useState('');
   const [addItemMode, setAddItemMode] = useState<AddItemMode>('menu');
   const [productSearch, setProductSearch] = useState('');
@@ -1841,22 +1842,40 @@ export function AdminPosView() {
       </section>
 
       {showMetricsOverview || showPreparationMetrics || showFloorMetrics ? (
-        <section
-          className={`mt-5 grid gap-3 ${
-            showMetricsOverview && showPreparationMetrics && showFloorMetrics ? 'md:grid-cols-2 xl:grid-cols-4' : 'md:grid-cols-2 xl:grid-cols-3'
-          }`}
-        >
-          {showFloorMetrics ? (
-            <MetricCard label="Mesas activas" value={String(posState?.tables.filter((table) => table.activeOrder != null).length ?? 0)} />
-          ) : null}
-          {showPreparationMetrics ? <MetricCard label="Preparacion cocina" value={String(kitchenQueue.length)} accent="amber" /> : null}
-          {showPreparationMetrics ? <MetricCard label="Preparacion bar" value={String(barQueue.length)} accent="cyan" /> : null}
-          {showMetricsOverview ? (
-            <MetricCard
-              label="Pendiente por cobrar"
-              value={formatCurrency(posState?.openOrders.reduce((sum, order) => sum + order.summary.remainingBalance, 0) ?? 0)}
-              accent="emerald"
-            />
+        <section className="mt-5">
+          <div className="flex items-center justify-between gap-3 rounded-[1.4rem] border border-white/10 bg-white/[0.04] px-4 py-3">
+            <div>
+              <p className="text-[0.65rem] uppercase tracking-[0.2em] text-mist">KPI</p>
+              <p className="mt-1 text-sm text-ivory/80">Toca para ver el tablero</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsMetricsCompactOpen((current) => !current)}
+              className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-ivory transition hover:border-cyanGlow/35 hover:bg-white/[0.08]"
+            >
+              {isMetricsCompactOpen ? 'Ocultar' : 'Ver'}
+            </button>
+          </div>
+
+          {isMetricsCompactOpen ? (
+            <section
+              className={`mt-4 grid gap-3 ${
+                showMetricsOverview && showPreparationMetrics && showFloorMetrics ? 'md:grid-cols-2 xl:grid-cols-4' : 'md:grid-cols-2 xl:grid-cols-3'
+              }`}
+            >
+              {showFloorMetrics ? (
+                <MetricCard label="Mesas activas" value={String(posState?.tables.filter((table) => table.activeOrder != null).length ?? 0)} />
+              ) : null}
+              {showPreparationMetrics ? <MetricCard label="Preparacion cocina" value={String(kitchenQueue.length)} accent="amber" /> : null}
+              {showPreparationMetrics ? <MetricCard label="Preparacion bar" value={String(barQueue.length)} accent="cyan" /> : null}
+              {showMetricsOverview ? (
+                <MetricCard
+                  label="Pendiente por cobrar"
+                  value={formatCurrency(posState?.openOrders.reduce((sum, order) => sum + order.summary.remainingBalance, 0) ?? 0)}
+                  accent="emerald"
+                />
+              ) : null}
+            </section>
           ) : null}
         </section>
       ) : null}

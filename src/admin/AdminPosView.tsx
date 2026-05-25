@@ -2241,7 +2241,10 @@ export function AdminPosView() {
 
           {isTableSheetOpen && selectedTable ? (
             <div className="fixed inset-0 z-50 overflow-hidden overscroll-none bg-[#0b0b0f] xl:hidden">
-              <div className="h-[100dvh] w-full overflow-y-auto overscroll-contain border border-white/10 bg-[#0b0b0f] p-4 pb-[max(7.5rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))] shadow-[0_-18px_40px_rgba(0,0,0,0.38)]">
+              <div
+                className="min-h-screen max-h-screen w-full overflow-y-auto overscroll-contain border border-white/10 bg-[#0b0b0f] p-4 pb-[max(7.5rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))] shadow-[0_-18px_40px_rgba(0,0,0,0.38)]"
+                style={{ WebkitOverflowScrolling: 'touch' }}
+              >
                 <div className="sticky top-0 z-30 -mx-4 -mt-4 mb-4 flex items-center justify-between gap-3 border-b border-white/10 bg-[#0b0b0f] px-4 py-3">
                   <div>
                     <p className="text-[0.68rem] uppercase tracking-[0.22em] text-cyanGlow/80">Mesa activa</p>

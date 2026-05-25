@@ -310,40 +310,83 @@ export async function addItemsToTableInSupabase(tableId: string, items: AddOrder
   const supabase = getSupabaseClient();
   const table = await getTableById(tableId);
   const order = await ensureOpenOrderForTable(table, actor);
-  const existingItems = await loadOrderItems(order.id);
-  const nextRound = Math.max(0, ...existingItems.map((item) => item.serviceRound)) + 1;
+  const currentItems = await loadOrderItems(order.id);
+  const returnedItems: PosOrderItem[] = [];
 
-  const rows = items.map((item) => ({
-    order_id: order.id,
-      menu_item_source_key: item.menuItemSourceKey,
-      product_name: item.productName.trim(),
-      product_slug: item.productSlug.trim(),
-      prep_area: derivePreparationAreaFromProductType(item.productType),
-    quantity: item.quantity,
-    unit_price: item.unitPrice,
-    total_price: item.unitPrice * item.quantity,
-    service_round: nextRound,
-    operational_status: 'draft',
-    financial_status: 'pending_payment',
-    notes: item.notes?.trim() ?? '',
-    created_by_email: actor.email,
-    updated_by_email: actor.email,
-  }));
+  for (const item of items) {
+    const draftFields = {
+      menuItemSourceKey: item.menuItemSourceKey,
+      notes: item.notes?.trim() ?? '',
+      prepArea: derivePreparationAreaFromProductType(item.productType),
+      productName: item.productName.trim(),
+      productSlug: item.productSlug.trim(),
+      unitPrice: normalizeMoney(item.unitPrice),
+    };
+    const existingDraft = currentItems.find((entry) => isMergeableDraftOrderItem(entry, draftFields));
 
-  const { data, error } = await supabase.from('pos_order_items').insert(rows as never).select('*');
-  throwIfError(error, 'No fue posible agregar productos a la mesa');
+    if (existingDraft) {
+      const quantity = existingDraft.quantity + item.quantity;
+      const { data, error } = await supabase
+        .from('pos_order_items')
+        .update({
+          quantity,
+          total_price: existingDraft.unitPrice * quantity,
+          updated_by_email: actor.email,
+        } as never)
+        .eq('id', existingDraft.id)
+        .eq('operational_status', 'draft')
+        .select('*')
+        .single();
+
+      throwIfError(error, 'No fue posible agrupar el producto en borrador');
+      const mergedItem = mapPosOrderItemRow(data);
+      returnedItems.push(mergedItem);
+      const itemIndex = currentItems.findIndex((entry) => entry.id === mergedItem.id);
+      if (itemIndex >= 0) {
+        currentItems[itemIndex] = mergedItem;
+      }
+      continue;
+    }
+
+    const nextRound = Math.max(0, ...currentItems.map((entry) => entry.serviceRound)) + 1;
+    const { data, error } = await supabase
+      .from('pos_order_items')
+      .insert({
+        order_id: order.id,
+        menu_item_source_key: draftFields.menuItemSourceKey,
+        product_name: draftFields.productName,
+        product_slug: draftFields.productSlug,
+        prep_area: draftFields.prepArea,
+        quantity: item.quantity,
+        unit_price: draftFields.unitPrice,
+        total_price: draftFields.unitPrice * item.quantity,
+        service_round: nextRound,
+        operational_status: 'draft',
+        financial_status: 'pending_payment',
+        notes: draftFields.notes,
+        created_by_email: actor.email,
+        updated_by_email: actor.email,
+      } as never)
+      .select('*')
+      .single();
+
+    throwIfError(error, 'No fue posible agregar productos a la mesa');
+    const createdItem = mapPosOrderItemRow(data);
+    returnedItems.push(createdItem);
+    currentItems.push(createdItem);
+  }
 
   await touchTableOccupation(order.tableId, order.id, actor.email);
   await insertPosLog({
     actor,
-    afterData: data,
+    afterData: returnedItems,
     eventType: 'items_added',
     notes: `${items.length} linea(s) agregadas a ${table.code}`,
     orderId: order.id,
     tableId: order.tableId,
   });
 
-  return data?.map(mapPosOrderItemRow) ?? [];
+  return returnedItems;
 }
 
 export async function addCustomItemToTableInSupabase(tableId: string, item: AddCustomOrderItemInput, actor: PosActorContext) {
@@ -367,6 +410,47 @@ export async function addCustomItemToTableInSupabase(tableId: string, item: AddC
   const table = await getTableById(tableId);
   const order = await ensureOpenOrderForTable(table, actor);
   const existingItems = await loadOrderItems(order.id);
+  const productSlug = `extra-${slugifyForPos(productName)}`;
+  const notes = item.notes?.trim() ?? '';
+  const existingDraft = existingItems.find((entry) =>
+    isMergeableDraftOrderItem(entry, {
+      menuItemSourceKey: null,
+      notes,
+      prepArea: item.prepArea,
+      productName,
+      productSlug,
+      unitPrice,
+    }),
+  );
+
+  if (existingDraft) {
+    const nextQuantity = existingDraft.quantity + quantity;
+    const { data, error } = await supabase
+      .from('pos_order_items')
+      .update({
+        quantity: nextQuantity,
+        total_price: existingDraft.unitPrice * nextQuantity,
+        updated_by_email: actor.email,
+      } as never)
+      .eq('id', existingDraft.id)
+      .eq('operational_status', 'draft')
+      .select('*')
+      .single();
+
+    throwIfError(error, 'No fue posible agrupar el extra en borrador');
+    await touchTableOccupation(order.tableId, order.id, actor.email);
+    await insertPosLog({
+      actor,
+      afterData: data,
+      eventType: 'custom_item_added',
+      notes: `${quantity} extra(s): ${productName}`,
+      orderId: order.id,
+      tableId: order.tableId,
+    });
+
+    return mapPosOrderItemRow(data);
+  }
+
   const nextRound = Math.max(0, ...existingItems.map((entry) => entry.serviceRound)) + 1;
   const { data, error } = await supabase
     .from('pos_order_items')
@@ -374,7 +458,7 @@ export async function addCustomItemToTableInSupabase(tableId: string, item: AddC
       order_id: order.id,
       menu_item_source_key: null,
       product_name: productName,
-      product_slug: `extra-${slugifyForPos(productName)}`,
+      product_slug: productSlug,
       prep_area: item.prepArea,
       quantity,
       unit_price: unitPrice,
@@ -382,7 +466,7 @@ export async function addCustomItemToTableInSupabase(tableId: string, item: AddC
       service_round: nextRound,
       operational_status: 'draft',
       financial_status: 'pending_payment',
-      notes: item.notes?.trim() ?? '',
+      notes,
       created_by_email: actor.email,
       updated_by_email: actor.email,
     } as never)
@@ -1515,6 +1599,30 @@ function derivePreparationAreaFromProductType(productType: string): PreparationA
     return 'kitchen';
   }
   return 'bar';
+}
+
+function isMergeableDraftOrderItem(
+  item: PosOrderItem,
+  fields: {
+    menuItemSourceKey?: string | null;
+    notes: string;
+    prepArea: PreparationArea;
+    productName: string;
+    productSlug: string;
+    unitPrice: number;
+  },
+) {
+  return (
+    item.operationalStatus === 'draft' &&
+    item.financialStatus === 'pending_payment' &&
+    !item.replacementForItemId &&
+    (item.menuItemSourceKey ?? null) === (fields.menuItemSourceKey ?? null) &&
+    item.prepArea === fields.prepArea &&
+    item.productName.trim().toLowerCase() === fields.productName.trim().toLowerCase() &&
+    item.productSlug.trim().toLowerCase() === fields.productSlug.trim().toLowerCase() &&
+    item.unitPrice === fields.unitPrice &&
+    (item.notes ?? '').trim() === fields.notes
+  );
 }
 
 async function isRegisteredBeverageItem(item: PosOrderItem) {

@@ -145,6 +145,7 @@ export function AdminPosView() {
   const [products, setProducts] = useState<PosProductOption[]>([]);
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
   const [isTableSheetOpen, setIsTableSheetOpen] = useState(false);
+  const [isCloseDraftWarningOpen, setIsCloseDraftWarningOpen] = useState(false);
   const [isMoveTableModalOpen, setIsMoveTableModalOpen] = useState(false);
   const [moveDestinationTableId, setMoveDestinationTableId] = useState('');
   const [addItemMode, setAddItemMode] = useState<AddItemMode>('menu');
@@ -179,6 +180,7 @@ export function AdminPosView() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [busyAction, setBusyAction] = useState<string | null>(null);
+  const [highlightedOrderItemId, setHighlightedOrderItemId] = useState<string | null>(null);
   const realtimeTimerRef = useRef<number | null>(null);
   const trailingSyncTimerRef = useRef<number | null>(null);
   const hiddenSyncTimestampRef = useRef(0);
@@ -187,7 +189,11 @@ export function AdminPosView() {
   const historicalSessionHeaderRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const cashierPaymentPanelRef = useRef<HTMLDivElement | null>(null);
   const floorWorkspacePanelRef = useRef<HTMLDivElement | null>(null);
+  const addItemFormRef = useRef<HTMLDivElement | null>(null);
   const pendingPaymentCardRefs = useRef<Record<string, HTMLElement | null>>({});
+  const orderItemCardRefs = useRef<Record<string, HTMLElement | null>>({});
+  const pendingOrderItemFocusRef = useRef<string | null>(null);
+  const shouldFocusReplacementFormRef = useRef(false);
   const shouldFocusCashierPaymentPanelRef = useRef(false);
   const shouldFocusFloorWorkspacePanelRef = useRef(false);
   const posStateRef = useRef<PosState | null>(null);
@@ -221,6 +227,12 @@ export function AdminPosView() {
     scheduleTrailingSync(320);
   };
 
+  const resetReplacementMode = () => {
+    shouldFocusReplacementFormRef.current = false;
+    setReplaceTargetItemId(null);
+    setReplaceReason('');
+  };
+
   useEffect(() => {
     posStateRef.current = posState;
   }, [posState]);
@@ -251,14 +263,24 @@ export function AdminPosView() {
 
     const scrollY = window.scrollY;
     const previousBodyStyles = {
+      height: document.body.style.height,
       overflow: document.body.style.overflow,
       paddingRight: document.body.style.paddingRight,
       position: document.body.style.position,
       top: document.body.style.top,
       width: document.body.style.width,
     };
+    const previousDocumentStyles = {
+      height: document.documentElement.style.height,
+      overflow: document.documentElement.style.overflow,
+      overscrollBehavior: document.documentElement.style.overscrollBehavior,
+    };
     const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
 
+    document.documentElement.style.height = '100%';
+    document.documentElement.style.overflow = 'hidden';
+    document.documentElement.style.overscrollBehavior = 'none';
+    document.body.style.height = '100%';
     document.body.style.overflow = 'hidden';
     document.body.style.position = 'fixed';
     document.body.style.top = `-${scrollY}px`;
@@ -269,6 +291,10 @@ export function AdminPosView() {
     }
 
     return () => {
+      document.documentElement.style.height = previousDocumentStyles.height;
+      document.documentElement.style.overflow = previousDocumentStyles.overflow;
+      document.documentElement.style.overscrollBehavior = previousDocumentStyles.overscrollBehavior;
+      document.body.style.height = previousBodyStyles.height;
       document.body.style.overflow = previousBodyStyles.overflow;
       document.body.style.paddingRight = previousBodyStyles.paddingRight;
       document.body.style.position = previousBodyStyles.position;
@@ -641,6 +667,10 @@ export function AdminPosView() {
   const selectedPendingDeliveryCount = selectedReadyCount + selectedPickingUpCount;
   const selectedPreparationCount =
     selectedOrder?.items.filter((item) => ['sent', 'pending_preparation', 'in_process'].includes(item.operationalStatus)).length ?? 0;
+  const selectedReplacementTarget = useMemo(
+    () => (replaceTargetItemId ? selectedOrder?.items.find((item) => item.id === replaceTargetItemId) ?? null : null),
+    [replaceTargetItemId, selectedOrder?.items],
+  );
   const selectedOrderVisibleItems = useMemo(() => {
     if (!selectedOrder) {
       return [] as PosOrderItem[];
@@ -809,6 +839,72 @@ export function AdminPosView() {
 
     return () => window.cancelAnimationFrame(focusAndReveal);
   }, [cashierRightPanel, highlightedPendingPaymentId]);
+
+  useEffect(() => {
+    const itemId = pendingOrderItemFocusRef.current;
+
+    if (!itemId || activeTab !== 'floor') {
+      return;
+    }
+
+    const itemCard = orderItemCardRefs.current[itemId];
+    if (!itemCard) {
+      return;
+    }
+
+    pendingOrderItemFocusRef.current = null;
+    setHighlightedOrderItemId(itemId);
+
+    const focusAndReveal = window.requestAnimationFrame(() => {
+      itemCard.focus({ preventScroll: true });
+      itemCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+    const clearHighlight = window.setTimeout(() => {
+      setHighlightedOrderItemId((current) => (current === itemId ? null : current));
+    }, 2200);
+
+    return () => {
+      window.cancelAnimationFrame(focusAndReveal);
+      window.clearTimeout(clearHighlight);
+    };
+  }, [activeTab, selectedOrderVisibleItems]);
+
+  useEffect(() => {
+    if (!shouldFocusReplacementFormRef.current || !replaceTargetItemId || activeTab !== 'floor') {
+      return;
+    }
+
+    const formPanel = addItemFormRef.current;
+    if (!formPanel) {
+      return;
+    }
+
+    shouldFocusReplacementFormRef.current = false;
+
+    const focusAndReveal = window.requestAnimationFrame(() => {
+      formPanel.focus({ preventScroll: true });
+      formPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+
+    return () => window.cancelAnimationFrame(focusAndReveal);
+  }, [activeTab, replaceTargetItemId]);
+
+  useEffect(() => {
+    resetReplacementMode();
+    setEditingItemId(null);
+    setAddItemMode('menu');
+    setIsCloseDraftWarningOpen(false);
+  }, [selectedTableId]);
+
+  useEffect(() => {
+    if (!replaceTargetItemId) {
+      return;
+    }
+
+    if (!selectedOrder?.items.some((item) => item.id === replaceTargetItemId)) {
+      resetReplacementMode();
+    }
+  }, [replaceTargetItemId, selectedOrder?.items]);
 
   useEffect(() => {
     if (activeTab !== 'cashier') {
@@ -1040,6 +1136,7 @@ export function AdminPosView() {
           actor,
         ), {
         onSuccess: (createdItem) => {
+          pendingOrderItemFocusRef.current = createdItem.id;
           setPosState((current) => (current ? mergeAddedItemsIntoPosState(current, selectedTable, [createdItem], actor.email) : current));
           setCustomItemName('');
           setCustomItemUnitPrice('');
@@ -1078,6 +1175,7 @@ export function AdminPosView() {
           ),
         {
           onSuccess: (replacementItem) => {
+            pendingOrderItemFocusRef.current = replacementItem.id;
             const now = new Date().toISOString();
             const cancelledOriginal = targetItem
               ? {
@@ -1097,8 +1195,7 @@ export function AdminPosView() {
                 ? mergeUpdatedItemsIntoPosState(current, cancelledOriginal ? [cancelledOriginal, replacementItem] : [replacementItem])
                 : current,
             );
-            setReplaceTargetItemId(null);
-            setReplaceReason('');
+            resetReplacementMode();
             setLineNotes('');
             setLineQuantity('1');
           },
@@ -1109,6 +1206,7 @@ export function AdminPosView() {
 
     await executeAction(`Producto agregado a ${selectedTable.code}`, async () => addItemsToTableInSupabase(selectedTable.id, [payload], actor), {
       onSuccess: (createdItems) => {
+        pendingOrderItemFocusRef.current = createdItems[0]?.id ?? null;
         setPosState((current) => (current ? mergeAddedItemsIntoPosState(current, selectedTable, createdItems, actor.email) : current));
         setLineNotes('');
         setLineQuantity('1');
@@ -1120,6 +1218,13 @@ export function AdminPosView() {
     setEditingItemId(item.id);
     setEditingNotes(item.notes ?? '');
     setEditingQuantity(String(item.quantity));
+  };
+
+  const handleStartReplacing = (item: PosOrderItem) => {
+    shouldFocusReplacementFormRef.current = true;
+    setAddItemMode('menu');
+    setReplaceTargetItemId(item.id);
+    setReplaceReason('');
   };
 
   const handleSaveEditing = async () => {
@@ -1328,6 +1433,17 @@ export function AdminPosView() {
     });
   };
 
+  const closeTableSheet = ({ force = false }: { force?: boolean } = {}) => {
+    if (!force && selectedOrderDraftItems.length > 0) {
+      setIsCloseDraftWarningOpen(true);
+      return;
+    }
+
+    resetReplacementMode();
+    setIsCloseDraftWarningOpen(false);
+    setIsTableSheetOpen(false);
+  };
+
   const handleSendDraftItems = async () => {
     if (!selectedOrder) {
       return;
@@ -1392,7 +1508,13 @@ export function AdminPosView() {
             </div>
           ) : null}
 
-          <div className="mt-5 rounded-[1.2rem] border border-white/8 bg-black/15 p-4">
+          <div
+            ref={addItemFormRef}
+            tabIndex={-1}
+            className={`mt-5 rounded-[1.2rem] border p-4 transition duration-500 focus:outline-none ${
+              replaceTargetItemId ? 'border-amberGlow/45 bg-amberGlow/[0.08] shadow-[0_0_0_4px_rgba(245,158,11,0.08)]' : 'border-white/8 bg-black/15'
+            }`}
+          >
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-[0.68rem] uppercase tracking-[0.22em] text-cyanGlow/75">
@@ -1405,11 +1527,23 @@ export function AdminPosView() {
                 </p>
               </div>
               {replaceTargetItemId ? (
-                <button type="button" onClick={() => setReplaceTargetItemId(null)} className={ghostButtonClassName}>
+                <button type="button" onClick={resetReplacementMode} className={ghostButtonClassName}>
                   Salir de reemplazo
                 </button>
               ) : null}
             </div>
+
+            {selectedReplacementTarget ? (
+              <div className="mt-4 rounded-[1rem] border border-amberGlow/30 bg-black/20 px-3 py-3 text-sm text-amber-100">
+                <p className="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-amberGlow">Reemplazando</p>
+                <p className="mt-2 font-semibold text-ivory">
+                  {selectedReplacementTarget.quantity} × {selectedReplacementTarget.productName}
+                </p>
+                <p className="mt-1 text-mist">
+                  Estado actual: {itemStatusLabels[selectedReplacementTarget.operationalStatus]} · {formatCurrency(selectedReplacementTarget.totalPrice)}
+                </p>
+              </div>
+            ) : null}
 
             <div className="mt-4 grid gap-3">
               {!replaceTargetItemId ? (
@@ -1505,19 +1639,22 @@ export function AdminPosView() {
                 <p className="text-[0.68rem] uppercase tracking-[0.22em] text-cyanGlow/75">Productos del pedido</p>
                 <p className="mt-2 text-sm text-mist">Cada producto conserva su estado, observaciones y trazabilidad.</p>
               </div>
-              {selectedOrderDraftItems.length ? (
-                <button type="button" onClick={() => void handleSendDraftItems()} disabled={Boolean(busyAction)} className={primaryButtonClassName}>
-                  Enviar a preparacion
-                </button>
-              ) : null}
             </div>
 
             {selectedOrderVisibleItems.length ? (
               selectedOrderVisibleItems.map((item) => (
                 <article
                   key={item.id}
-                  className={`rounded-[1.2rem] border p-4 ${
-                    item.operationalStatus === 'draft'
+                  ref={(element) => {
+                    orderItemCardRefs.current[item.id] = element;
+                  }}
+                  tabIndex={-1}
+                  className={`rounded-[1.2rem] border p-4 transition duration-500 focus:outline-none ${
+                    replaceTargetItemId === item.id
+                      ? 'border-amberGlow/70 bg-amberGlow/[0.12] shadow-[0_0_0_4px_rgba(245,158,11,0.1)]'
+                      : highlightedOrderItemId === item.id
+                      ? 'border-cyanGlow/70 bg-cyanGlow/[0.14] shadow-[0_0_0_4px_rgba(56,189,248,0.12)]'
+                      : item.operationalStatus === 'draft'
                       ? 'border-amberGlow/28 bg-amberGlow/[0.06]'
                       : 'border-white/8 bg-white/[0.02]'
                   }`}
@@ -1582,14 +1719,7 @@ export function AdminPosView() {
                     ) : null}
                     {!editingItemId && ['sent', 'pending_preparation'].includes(item.operationalStatus) ? (
                       <>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setAddItemMode('menu');
-                            setReplaceTargetItemId(item.id);
-                          }}
-                          className={ghostButtonClassName}
-                        >
+                        <button type="button" onClick={() => handleStartReplacing(item)} className={ghostButtonClassName}>
                           Reemplazar
                         </button>
                         <button type="button" onClick={() => void handleCancelItem(item)} className={dangerButtonClassName}>
@@ -1852,7 +1982,13 @@ export function AdminPosView() {
                     </div>
                   ) : null}
 
-                  <div className="mt-5 rounded-[1.2rem] border border-white/8 bg-black/15 p-4">
+                  <div
+                    ref={addItemFormRef}
+                    tabIndex={-1}
+                    className={`mt-5 rounded-[1.2rem] border p-4 transition duration-500 focus:outline-none ${
+                      replaceTargetItemId ? 'border-amberGlow/45 bg-amberGlow/[0.08] shadow-[0_0_0_4px_rgba(245,158,11,0.08)]' : 'border-white/8 bg-black/15'
+                    }`}
+                  >
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
                         <p className="text-[0.68rem] uppercase tracking-[0.22em] text-cyanGlow/75">
@@ -1865,11 +2001,23 @@ export function AdminPosView() {
                         </p>
                       </div>
                       {replaceTargetItemId ? (
-                        <button type="button" onClick={() => setReplaceTargetItemId(null)} className={ghostButtonClassName}>
+                        <button type="button" onClick={resetReplacementMode} className={ghostButtonClassName}>
                           Salir de reemplazo
                         </button>
                       ) : null}
                     </div>
+
+                    {selectedReplacementTarget ? (
+                      <div className="mt-4 rounded-[1rem] border border-amberGlow/30 bg-black/20 px-3 py-3 text-sm text-amber-100">
+                        <p className="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-amberGlow">Reemplazando</p>
+                        <p className="mt-2 font-semibold text-ivory">
+                          {selectedReplacementTarget.quantity} × {selectedReplacementTarget.productName}
+                        </p>
+                        <p className="mt-1 text-mist">
+                          Estado actual: {itemStatusLabels[selectedReplacementTarget.operationalStatus]} · {formatCurrency(selectedReplacementTarget.totalPrice)}
+                        </p>
+                      </div>
+                    ) : null}
 
                     <div className="mt-4 grid gap-3">
                       {!replaceTargetItemId ? (
@@ -1959,25 +2107,42 @@ export function AdminPosView() {
                     </button>
                   </div>
 
+                  {selectedOrderDraftItems.length ? (
+                    <div className="sticky bottom-3 z-10 mt-4 grid gap-3 rounded-[1.1rem] border border-amberGlow/35 bg-[#18130d]/95 px-3 py-3 shadow-[0_14px_34px_rgba(0,0,0,0.32)] backdrop-blur sm:flex sm:items-center sm:justify-between">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold leading-5 text-ivory">
+                          {selectedOrderDraftItems.length} borrador{selectedOrderDraftItems.length === 1 ? '' : 'es'} sin enviar
+                        </p>
+                        <p className="mt-1 text-xs leading-5 text-amber-100/80">Envia la tanda para que cocina/bar la vea.</p>
+                      </div>
+                      <button type="button" onClick={() => void handleSendDraftItems()} disabled={Boolean(busyAction)} className={`${primaryButtonClassName} w-full justify-center sm:w-auto`}>
+                        Enviar a preparacion
+                      </button>
+                    </div>
+                  ) : null}
+
                   <div className="mt-5 space-y-3">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
                         <p className="text-[0.68rem] uppercase tracking-[0.22em] text-cyanGlow/75">Productos del pedido</p>
                         <p className="mt-2 text-sm text-mist">Cada producto conserva su estado, observaciones y trazabilidad.</p>
                       </div>
-                      {selectedOrderDraftItems.length ? (
-                        <button type="button" onClick={() => void handleSendDraftItems()} disabled={Boolean(busyAction)} className={primaryButtonClassName}>
-                          Enviar a preparacion
-                        </button>
-                      ) : null}
                     </div>
 
                     {selectedOrder?.items.length ? (
                       selectedOrder.items.map((item) => (
                         <article
                           key={item.id}
-                          className={`rounded-[1.2rem] border p-4 ${
-                            item.operationalStatus === 'draft'
+                          ref={(element) => {
+                            orderItemCardRefs.current[item.id] = element;
+                          }}
+                          tabIndex={-1}
+                          className={`rounded-[1.2rem] border p-4 transition duration-500 focus:outline-none ${
+                            replaceTargetItemId === item.id
+                              ? 'border-amberGlow/70 bg-amberGlow/[0.12] shadow-[0_0_0_4px_rgba(245,158,11,0.1)]'
+                              : highlightedOrderItemId === item.id
+                              ? 'border-cyanGlow/70 bg-cyanGlow/[0.14] shadow-[0_0_0_4px_rgba(56,189,248,0.12)]'
+                              : item.operationalStatus === 'draft'
                               ? 'border-amberGlow/28 bg-amberGlow/[0.06]'
                               : 'border-white/8 bg-white/[0.02]'
                           }`}
@@ -2042,14 +2207,7 @@ export function AdminPosView() {
                             ) : null}
                             {!editingItemId && ['sent', 'pending_preparation'].includes(item.operationalStatus) ? (
                               <>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setAddItemMode('menu');
-                                    setReplaceTargetItemId(item.id);
-                                  }}
-                                  className={ghostButtonClassName}
-                                >
+                                <button type="button" onClick={() => handleStartReplacing(item)} className={ghostButtonClassName}>
                                   Reemplazar
                                 </button>
                                 <button type="button" onClick={() => void handleCancelItem(item)} className={dangerButtonClassName}>
@@ -2082,21 +2240,56 @@ export function AdminPosView() {
           </div>
 
           {isTableSheetOpen && selectedTable ? (
-            <div className="fixed inset-0 z-40 flex items-end overflow-hidden overscroll-contain bg-black/70 xl:hidden">
-              <div className="max-h-[92vh] w-full overflow-y-auto overscroll-contain rounded-t-[1.8rem] border border-white/10 bg-[#0b0b0f] p-4 shadow-[0_-18px_40px_rgba(0,0,0,0.38)]">
-                <div className="mb-4 flex items-center justify-between gap-3">
+            <div className="fixed inset-0 z-50 overflow-hidden overscroll-none bg-[#0b0b0f] xl:hidden">
+              <div className="h-[100dvh] w-full overflow-y-auto overscroll-contain border border-white/10 bg-[#0b0b0f] p-4 pb-[max(7.5rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))] shadow-[0_-18px_40px_rgba(0,0,0,0.38)]">
+                <div className="sticky top-0 z-30 -mx-4 -mt-4 mb-4 flex items-center justify-between gap-3 border-b border-white/10 bg-[#0b0b0f] px-4 py-3">
                   <div>
                     <p className="text-[0.68rem] uppercase tracking-[0.22em] text-cyanGlow/80">Mesa activa</p>
                     <p className="mt-2 font-semibold text-ivory">
                       {selectedTable.name} · {selectedTable.code}
                     </p>
                   </div>
-                  <button type="button" onClick={() => setIsTableSheetOpen(false)} className={ghostButtonClassName}>
+                  <button
+                    type="button"
+                    onClick={() => closeTableSheet()}
+                    className={ghostButtonClassName}
+                  >
                     Cerrar
                   </button>
                 </div>
                 {renderSelectedTableWorkspace()}
               </div>
+              {selectedOrderDraftItems.length ? (
+                <div className="absolute inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-20 grid gap-2 rounded-[1.1rem] border border-amberGlow/35 bg-[#18130d]/95 px-3 py-3 shadow-[0_14px_34px_rgba(0,0,0,0.38)] backdrop-blur">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold leading-5 text-ivory">
+                      {selectedOrderDraftItems.length} borrador{selectedOrderDraftItems.length === 1 ? '' : 'es'} sin enviar
+                    </p>
+                    <p className="mt-1 text-xs leading-5 text-amber-100/80">Envia la tanda para que cocina/bar la vea.</p>
+                  </div>
+                  <button type="button" onClick={() => void handleSendDraftItems()} disabled={Boolean(busyAction)} className={`${primaryButtonClassName} w-full justify-center`}>
+                    Enviar a preparacion
+                  </button>
+                </div>
+              ) : null}
+              {isCloseDraftWarningOpen ? (
+                <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/72 px-4">
+                  <div className="w-full max-w-sm rounded-[1.25rem] border border-amberGlow/30 bg-[#111015] p-4 shadow-[0_18px_44px_rgba(0,0,0,0.42)]">
+                    <p className="text-[0.68rem] font-semibold uppercase tracking-[0.22em] text-amberGlow">Borradores pendientes</p>
+                    <p className="mt-3 text-sm leading-6 text-mist">
+                      Hay {selectedOrderDraftItems.length} borrador{selectedOrderDraftItems.length === 1 ? '' : 'es'} sin enviar. No se pierde{selectedOrderDraftItems.length === 1 ? '' : 'n'} al cerrar.
+                    </p>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <button type="button" onClick={() => setIsCloseDraftWarningOpen(false)} className={primaryButtonClassName}>
+                        Seguir editando
+                      </button>
+                      <button type="button" onClick={() => closeTableSheet({ force: true })} className={ghostButtonClassName}>
+                        Cerrar sin enviar
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
             </div>
           ) : null}
 
@@ -3515,7 +3708,18 @@ function mergeAddedItemsIntoPosState(state: PosState, selectedTable: PosTableWit
     }
 
     const existingOrder = table.activeOrder;
-    const items = existingOrder ? [...existingOrder.items, ...createdItems] : [...createdItems];
+    const incomingItemsById = new Map(createdItems.map((item) => [item.id, item]));
+    const existingItems = existingOrder?.items ?? [];
+    const existingItemIds = new Set(existingItems.map((item) => item.id));
+    const items = existingOrder
+      ? [
+          ...existingItems.map((item) => {
+            const incomingItem = incomingItemsById.get(item.id);
+            return incomingItem ? { ...item, ...incomingItem } : item;
+          }),
+          ...createdItems.filter((item) => !existingItemIds.has(item.id)),
+        ]
+      : [...createdItems];
     const payments = existingOrder?.payments ?? [];
     const summary = buildOrderSummaryForUi(items, payments);
     const nextOrder =

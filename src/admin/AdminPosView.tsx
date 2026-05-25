@@ -243,6 +243,42 @@ export function AdminPosView() {
   }, [canOperateBar, canOperateCashier, canOperateFloor, canOperateKitchen]);
 
   useEffect(() => {
+    const shouldLockPageScroll = isTableSheetOpen || isMoveTableModalOpen;
+
+    if (!shouldLockPageScroll || typeof window === 'undefined') {
+      return;
+    }
+
+    const scrollY = window.scrollY;
+    const previousBodyStyles = {
+      overflow: document.body.style.overflow,
+      paddingRight: document.body.style.paddingRight,
+      position: document.body.style.position,
+      top: document.body.style.top,
+      width: document.body.style.width,
+    };
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+
+    document.body.style.overflow = 'hidden';
+    document.body.style.position = 'fixed';
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = '100%';
+
+    if (scrollbarWidth > 0) {
+      document.body.style.paddingRight = `${scrollbarWidth}px`;
+    }
+
+    return () => {
+      document.body.style.overflow = previousBodyStyles.overflow;
+      document.body.style.paddingRight = previousBodyStyles.paddingRight;
+      document.body.style.position = previousBodyStyles.position;
+      document.body.style.top = previousBodyStyles.top;
+      document.body.style.width = previousBodyStyles.width;
+      window.scrollTo(0, scrollY);
+    };
+  }, [isMoveTableModalOpen, isTableSheetOpen]);
+
+  useEffect(() => {
     const unlockAudioAndNotifications = () => {
       if (typeof window !== 'undefined' && 'AudioContext' in window) {
         const AudioContextCtor = window.AudioContext;
@@ -2046,8 +2082,8 @@ export function AdminPosView() {
           </div>
 
           {isTableSheetOpen && selectedTable ? (
-            <div className="fixed inset-0 z-40 flex items-end bg-black/70 xl:hidden">
-              <div className="max-h-[92vh] w-full overflow-y-auto rounded-t-[1.8rem] border border-white/10 bg-[#0b0b0f] p-4 shadow-[0_-18px_40px_rgba(0,0,0,0.38)]">
+            <div className="fixed inset-0 z-40 flex items-end overflow-hidden overscroll-contain bg-black/70 xl:hidden">
+              <div className="max-h-[92vh] w-full overflow-y-auto overscroll-contain rounded-t-[1.8rem] border border-white/10 bg-[#0b0b0f] p-4 shadow-[0_-18px_40px_rgba(0,0,0,0.38)]">
                 <div className="mb-4 flex items-center justify-between gap-3">
                   <div>
                     <p className="text-[0.68rem] uppercase tracking-[0.22em] text-cyanGlow/80">Mesa activa</p>
@@ -2065,8 +2101,8 @@ export function AdminPosView() {
           ) : null}
 
           {isMoveTableModalOpen && selectedTable?.activeOrder ? (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/72 px-4">
-              <div className="w-full max-w-lg rounded-[1.4rem] border border-white/10 bg-[#0b0b0f] p-5 shadow-[0_18px_60px_rgba(0,0,0,0.45)]">
+            <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden overscroll-contain bg-black/72 px-4">
+              <div className="max-h-[92vh] w-full max-w-lg overflow-y-auto overscroll-contain rounded-[1.4rem] border border-white/10 bg-[#0b0b0f] p-5 shadow-[0_18px_60px_rgba(0,0,0,0.45)]">
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <p className="text-[0.68rem] uppercase tracking-[0.22em] text-cyanGlow/80">Trasladar cuenta</p>

@@ -246,6 +246,14 @@ export interface AddOrderItemInput {
   unitPrice: number;
 }
 
+export interface AddCustomOrderItemInput {
+  notes?: string;
+  prepArea: PreparationArea;
+  productName: string;
+  quantity: number;
+  unitPrice: number;
+}
+
 export interface UpdateOrderItemInput {
   notes?: string;
   quantity?: number;

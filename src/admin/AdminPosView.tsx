@@ -3,6 +3,7 @@ import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { AdminLayout } from './AdminLayout';
 import { useSupabaseAuth } from '../auth/SupabaseAuthProvider';
 import type {
+  AddCustomOrderItemInput,
   AddOrderItemInput,
   CreatePosTableInput,
   PaymentAllocationMode,
@@ -21,6 +22,7 @@ import type {
 } from '../shared/operations/operations.types';
 import {
   addItemsToTableInSupabase,
+  addCustomItemToTableInSupabase,
   cancelOrderItemInSupabase,
   closeActiveSalesSessionInSupabase,
   createPosTableInSupabase,
@@ -39,11 +41,13 @@ import {
   transitionPreparationItemInSupabase,
   updateOrderItemInSupabase,
   updatePosPaymentStatusInSupabase,
+  voidProcessedOrderItemInSupabase,
   type PosRealtimeEvent,
 } from '../integrations/supabase/posOperationsRepository';
 
 type WorkspaceTab = 'floor' | 'kitchen' | 'bar' | 'cashier';
 type CashierRightPanel = 'summary' | 'previous_sessions' | 'validations' | 'movements';
+type AddItemMode = 'menu' | 'extra';
 
 const roleLabels: Record<StaffRole, string> = {
   superadmin: 'Superadmin',
@@ -143,10 +147,14 @@ export function AdminPosView() {
   const [isTableSheetOpen, setIsTableSheetOpen] = useState(false);
   const [isMoveTableModalOpen, setIsMoveTableModalOpen] = useState(false);
   const [moveDestinationTableId, setMoveDestinationTableId] = useState('');
+  const [addItemMode, setAddItemMode] = useState<AddItemMode>('menu');
   const [productSearch, setProductSearch] = useState('');
   const [selectedProductSourceKey, setSelectedProductSourceKey] = useState('');
   const [lineQuantity, setLineQuantity] = useState('1');
   const [lineNotes, setLineNotes] = useState('');
+  const [customItemName, setCustomItemName] = useState('');
+  const [customItemPrepArea, setCustomItemPrepArea] = useState<AddCustomOrderItemInput['prepArea']>('bar');
+  const [customItemUnitPrice, setCustomItemUnitPrice] = useState('');
   const [replaceTargetItemId, setReplaceTargetItemId] = useState<string | null>(null);
   const [replaceReason, setReplaceReason] = useState('');
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
@@ -462,6 +470,15 @@ export function AdminPosView() {
   const selectedOrderDraftItems = selectedOrder?.items.filter((item) => item.operationalStatus === 'draft') ?? [];
   const parsedLineQuantity = parseOptionalNumber(lineQuantity);
   const isLineQuantityValid = parsedLineQuantity != null && parsedLineQuantity > 0;
+  const parsedCustomItemUnitPrice = parseOptionalNumber(customItemUnitPrice);
+  const customItemNameValue = customItemName.trim();
+  const isCustomItemUnitPriceValid = parsedCustomItemUnitPrice != null && parsedCustomItemUnitPrice > 0;
+  const canSubmitLineItem =
+    replaceTargetItemId
+      ? Boolean(selectedProduct && isLineQuantityValid && !busyAction)
+      : addItemMode === 'extra'
+      ? Boolean(selectedTable && customItemNameValue && isLineQuantityValid && isCustomItemUnitPriceValid && !replaceTargetItemId && !busyAction)
+      : Boolean(selectedProduct && isLineQuantityValid && !busyAction);
   const parsedEditingQuantity = parseOptionalNumber(editingQuantity);
   const isEditingQuantityValid = parsedEditingQuantity != null && parsedEditingQuantity > 0;
   const parsedCapacity = createTableForm.capacity ?? null;
@@ -513,8 +530,10 @@ export function AdminPosView() {
     () => buildSelectablePaymentUnits(selectedCashierOrder, outstandingByItem),
     [outstandingByItem, selectedCashierOrder],
   );
+  const cashierProductGroups = useMemo(() => buildCashierProductGroups(selectedCashierOrder), [selectedCashierOrder]);
   const canDeleteSelectedTable = Boolean(selectedTable && !selectedTable.activeOrder && !selectedTable.activeOrderId && selectedTable.status !== 'occupied');
   const canMoveSelectedOrder = Boolean(selectedTable?.activeOrder && (actor.roles.includes('superadmin') || actor.roles.includes('waiter')));
+  const canVoidProcessedItems = actor.roles.includes('superadmin') || actor.roles.includes('cashier');
   const createTableName = createTableForm.name.trim();
   const createTableCode = createTableForm.code.trim().toUpperCase();
   const canCreateTable = Boolean(createTableName && createTableCode && isCapacityValid && !busyAction);
@@ -573,6 +592,13 @@ export function AdminPosView() {
 
   const kitchenQueue = posState?.pendingPreparationKitchen ?? [];
   const barQueue = posState?.pendingPreparationBar ?? [];
+  const kitchenDirectDispatchSourceKeys = useMemo(() => new Set<string>(), []);
+  const directDispatchSourceKeys = useMemo(
+    () => new Set(products.filter((product) => product.type.trim().toLowerCase() === 'bebidas').map((product) => product.sourceKey)),
+    [products],
+  );
+  const sortedKitchenQueue = useMemo(() => sortPreparationQueueForUi(kitchenQueue, kitchenDirectDispatchSourceKeys), [kitchenDirectDispatchSourceKeys, kitchenQueue]);
+  const sortedBarQueue = useMemo(() => sortPreparationQueueForUi(barQueue, directDispatchSourceKeys), [barQueue, directDispatchSourceKeys]);
   const allCashierOrders = useMemo(() => [...(posState?.openOrders ?? []), ...closedSales], [closedSales, posState?.openOrders]);
   const selectedReadyCount = selectedOrder?.items.filter((item) => item.operationalStatus === 'ready').length ?? 0;
   const selectedPickingUpCount = selectedOrder?.items.filter((item) => item.operationalStatus === 'picking_up').length ?? 0;
@@ -632,6 +658,10 @@ export function AdminPosView() {
     () => activeSalesSessionOrders.filter((order) => order.closedAt != null).sort((left, right) => (right.closedAt ?? '').localeCompare(left.closedAt ?? '')),
     [activeSalesSessionOrders],
   );
+  const activeSalesSessionPaidClosedSales = useMemo(
+    () => activeSalesSessionClosedSales.filter(isPaidClosedSale),
+    [activeSalesSessionClosedSales],
+  );
   const selectedHistoricalSession = selectedHistoricalSessionId
     ? previousClosedSessions.find((session) => session.id === selectedHistoricalSessionId) ?? null
     : null;
@@ -639,7 +669,7 @@ export function AdminPosView() {
     () =>
       selectedHistoricalSession
         ? closedSales
-            .filter((order) => order.salesSessionId === selectedHistoricalSession.id)
+            .filter((order) => order.salesSessionId === selectedHistoricalSession.id && isPaidClosedSale(order))
             .sort((left, right) => (right.closedAt ?? right.updatedAt).localeCompare(left.closedAt ?? left.updatedAt))
         : [],
     [closedSales, selectedHistoricalSession],
@@ -935,13 +965,57 @@ export function AdminPosView() {
   };
 
   const handleAddOrReplaceItem = async () => {
-    if (!selectedTable || !selectedProduct) {
-      setErrorMessage('Selecciona una mesa y un producto antes de continuar.');
+    if (!selectedTable) {
+      setErrorMessage('Selecciona una mesa antes de continuar.');
       return;
     }
 
     if (!isLineQuantityValid || parsedLineQuantity == null) {
       setErrorMessage('La cantidad debe ser mayor que cero.');
+      return;
+    }
+
+    if (addItemMode === 'extra') {
+      if (replaceTargetItemId) {
+        setErrorMessage('Sal del modo reemplazo antes de agregar un extra.');
+        return;
+      }
+
+      if (!customItemNameValue) {
+        setErrorMessage('El extra debe tener un nombre.');
+        return;
+      }
+
+      if (!isCustomItemUnitPriceValid || parsedCustomItemUnitPrice == null) {
+        setErrorMessage('El precio unitario del extra debe ser mayor que cero.');
+        return;
+      }
+
+      await executeAction(`Extra agregado a ${selectedTable.code}`, async () =>
+        addCustomItemToTableInSupabase(
+          selectedTable.id,
+          {
+            notes: lineNotes,
+            prepArea: customItemPrepArea,
+            productName: customItemNameValue,
+            quantity: parsedLineQuantity,
+            unitPrice: parsedCustomItemUnitPrice,
+          },
+          actor,
+        ), {
+        onSuccess: (createdItem) => {
+          setPosState((current) => (current ? mergeAddedItemsIntoPosState(current, selectedTable, [createdItem], actor.email) : current));
+          setCustomItemName('');
+          setCustomItemUnitPrice('');
+          setLineNotes('');
+          setLineQuantity('1');
+        },
+      });
+      return;
+    }
+
+    if (!selectedProduct) {
+      setErrorMessage('Selecciona un producto antes de continuar.');
       return;
     }
 
@@ -1074,6 +1148,34 @@ export function AdminPosView() {
     await executeAction(`Recogiendo ${item.productName}`, async () => markOrderItemPickingUpInSupabase(item.id, actor, item), {
       onSuccess: (updatedItem) => {
         setPosState((current) => (current ? mergeUpdatedItemsIntoPosState(current, [updatedItem]) : current));
+      },
+    });
+  };
+
+  const handleVoidProcessedItem = async (item: PosOrderItem) => {
+    if (!canVoidProcessedItems) {
+      setErrorMessage('Tu rol actual no puede anular productos por excepcion.');
+      return;
+    }
+
+    const reason = window.prompt(
+      `Motivo obligatorio para anular 1 unidad de "${item.productName}":`,
+      'Producto registrado por error; no corresponde a la cuenta real',
+    );
+    if (!reason?.trim()) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Se anulara 1 unidad de "${item.productName}" sin borrarla del historial. Esta accion recalcula la cuenta y queda registrada en trazabilidad. ¿Continuar?`,
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    await executeAction(`Unidad anulada por excepcion: ${item.productName}`, async () => voidProcessedOrderItemInSupabase(item.id, reason, actor, item, 1), {
+      onSuccess: (updatedItems) => {
+        setPosState((current) => (current ? mergeUpdatedItemsIntoPosState(current, updatedItems) : current));
       },
     });
   };
@@ -1274,18 +1376,62 @@ export function AdminPosView() {
             </div>
 
             <div className="mt-4 grid gap-3">
-              <Field label="Buscar producto">
-                <input value={productSearch} onChange={(event) => setProductSearch(event.target.value)} className={inputClassName} placeholder="Corona, Poker, jugo..." />
-              </Field>
-              <Field label="Producto">
-                <select value={selectedProductSourceKey} onChange={(event) => setSelectedProductSourceKey(event.target.value)} className={inputClassName}>
-                  {filteredProducts.slice(0, 60).map((product) => (
-                    <option key={product.sourceKey} value={product.sourceKey}>
-                      {product.name} · {formatCurrency(product.price)}
-                    </option>
+              {!replaceTargetItemId ? (
+                <div className="flex w-fit rounded-full border border-white/10 bg-black/20 p-1">
+                  {(['menu', 'extra'] as AddItemMode[]).map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => setAddItemMode(mode)}
+                      className={`rounded-full px-3 py-1.5 text-[0.65rem] font-semibold uppercase tracking-[0.18em] transition ${
+                        addItemMode === mode ? 'bg-cyanGlow/14 text-cyanGlow' : 'text-mist hover:text-ivory'
+                      }`}
+                    >
+                      {mode === 'menu' ? 'Menu' : 'Extra'}
+                    </button>
                   ))}
-                </select>
-              </Field>
+                </div>
+              ) : null}
+              {addItemMode === 'menu' || replaceTargetItemId ? (
+                <>
+                  <Field label="Buscar producto">
+                    <input value={productSearch} onChange={(event) => setProductSearch(event.target.value)} className={inputClassName} placeholder="Corona, Poker, jugo..." />
+                  </Field>
+                  <Field label="Producto">
+                    <select value={selectedProductSourceKey} onChange={(event) => setSelectedProductSourceKey(event.target.value)} className={inputClassName}>
+                      {filteredProducts.slice(0, 60).map((product) => (
+                        <option key={product.sourceKey} value={product.sourceKey}>
+                          {product.name} · {formatCurrency(product.price)}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                </>
+              ) : (
+                <>
+                  <Field label="Nombre del extra">
+                    <input value={customItemName} onChange={(event) => setCustomItemName(event.target.value)} className={inputClassName} placeholder="Shot de tequila" />
+                  </Field>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <Field label="Area">
+                      <select value={customItemPrepArea} onChange={(event) => setCustomItemPrepArea(event.target.value as AddCustomOrderItemInput['prepArea'])} className={inputClassName}>
+                        <option value="bar">Bar</option>
+                        <option value="kitchen">Cocina</option>
+                      </select>
+                    </Field>
+                    <Field label="Precio unitario">
+                      <input
+                        value={formatCurrencyInputValue(customItemUnitPrice)}
+                        onChange={(event) => setCustomItemUnitPrice(sanitizeDigitsInput(event.target.value))}
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        className={getQuantityInputClassName(isCustomItemUnitPriceValid)}
+                        placeholder="$ 10.000"
+                      />
+                    </Field>
+                  </div>
+                </>
+              )}
               <div className="grid gap-3 md:grid-cols-2">
                 <Field label="Cantidad">
                   <input
@@ -1307,13 +1453,13 @@ export function AdminPosView() {
               </Field>
             </div>
 
-              <button
+            <button
                 type="button"
                 onClick={() => void handleAddOrReplaceItem()}
-                disabled={!selectedProduct || !isLineQuantityValid || Boolean(busyAction)}
+                disabled={!canSubmitLineItem}
                 className={`${primaryButtonClassName} mt-4`}
               >
-                {replaceTargetItemId ? 'Aplicar reemplazo' : 'Agregar a la mesa'}
+                {replaceTargetItemId ? 'Aplicar reemplazo' : addItemMode === 'extra' ? 'Agregar extra' : 'Agregar a la mesa'}
             </button>
           </div>
 
@@ -1400,7 +1546,14 @@ export function AdminPosView() {
                     ) : null}
                     {!editingItemId && ['sent', 'pending_preparation'].includes(item.operationalStatus) ? (
                       <>
-                        <button type="button" onClick={() => setReplaceTargetItemId(item.id)} className={ghostButtonClassName}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAddItemMode('menu');
+                            setReplaceTargetItemId(item.id);
+                          }}
+                          className={ghostButtonClassName}
+                        >
                           Reemplazar
                         </button>
                         <button type="button" onClick={() => void handleCancelItem(item)} className={dangerButtonClassName}>
@@ -1683,18 +1836,62 @@ export function AdminPosView() {
                     </div>
 
                     <div className="mt-4 grid gap-3">
-                      <Field label="Buscar producto">
-                        <input value={productSearch} onChange={(event) => setProductSearch(event.target.value)} className={inputClassName} placeholder="Corona, Poker, jugo..." />
-                      </Field>
-                      <Field label="Producto">
-                        <select value={selectedProductSourceKey} onChange={(event) => setSelectedProductSourceKey(event.target.value)} className={inputClassName}>
-                          {filteredProducts.slice(0, 60).map((product) => (
-                            <option key={product.sourceKey} value={product.sourceKey}>
-                              {product.name} · {formatCurrency(product.price)}
-                            </option>
+                      {!replaceTargetItemId ? (
+                        <div className="flex w-fit rounded-full border border-white/10 bg-black/20 p-1">
+                          {(['menu', 'extra'] as AddItemMode[]).map((mode) => (
+                            <button
+                              key={mode}
+                              type="button"
+                              onClick={() => setAddItemMode(mode)}
+                              className={`rounded-full px-3 py-1.5 text-[0.65rem] font-semibold uppercase tracking-[0.18em] transition ${
+                                addItemMode === mode ? 'bg-cyanGlow/14 text-cyanGlow' : 'text-mist hover:text-ivory'
+                              }`}
+                            >
+                              {mode === 'menu' ? 'Menu' : 'Extra'}
+                            </button>
                           ))}
-                        </select>
-                      </Field>
+                        </div>
+                      ) : null}
+                      {addItemMode === 'menu' || replaceTargetItemId ? (
+                        <>
+                          <Field label="Buscar producto">
+                            <input value={productSearch} onChange={(event) => setProductSearch(event.target.value)} className={inputClassName} placeholder="Corona, Poker, jugo..." />
+                          </Field>
+                          <Field label="Producto">
+                            <select value={selectedProductSourceKey} onChange={(event) => setSelectedProductSourceKey(event.target.value)} className={inputClassName}>
+                              {filteredProducts.slice(0, 60).map((product) => (
+                                <option key={product.sourceKey} value={product.sourceKey}>
+                                  {product.name} · {formatCurrency(product.price)}
+                                </option>
+                              ))}
+                            </select>
+                          </Field>
+                        </>
+                      ) : (
+                        <>
+                          <Field label="Nombre del extra">
+                            <input value={customItemName} onChange={(event) => setCustomItemName(event.target.value)} className={inputClassName} placeholder="Shot de tequila" />
+                          </Field>
+                          <div className="grid gap-3 md:grid-cols-2">
+                            <Field label="Area">
+                              <select value={customItemPrepArea} onChange={(event) => setCustomItemPrepArea(event.target.value as AddCustomOrderItemInput['prepArea'])} className={inputClassName}>
+                                <option value="bar">Bar</option>
+                                <option value="kitchen">Cocina</option>
+                              </select>
+                            </Field>
+                            <Field label="Precio unitario">
+                              <input
+                                value={formatCurrencyInputValue(customItemUnitPrice)}
+                                onChange={(event) => setCustomItemUnitPrice(sanitizeDigitsInput(event.target.value))}
+                                inputMode="numeric"
+                                pattern="[0-9]*"
+                                className={getQuantityInputClassName(isCustomItemUnitPriceValid)}
+                                placeholder="$ 10.000"
+                              />
+                            </Field>
+                          </div>
+                        </>
+                      )}
                       <div className="grid gap-3 md:grid-cols-2">
                         <Field label="Cantidad">
                           <input
@@ -1719,10 +1916,10 @@ export function AdminPosView() {
                     <button
                       type="button"
                       onClick={() => void handleAddOrReplaceItem()}
-                      disabled={!selectedProduct || !isLineQuantityValid || Boolean(busyAction)}
+                      disabled={!canSubmitLineItem}
                       className={`${primaryButtonClassName} mt-4`}
                     >
-                      {replaceTargetItemId ? 'Aplicar reemplazo' : 'Agregar a la mesa'}
+                      {replaceTargetItemId ? 'Aplicar reemplazo' : addItemMode === 'extra' ? 'Agregar extra' : 'Agregar a la mesa'}
                     </button>
                   </div>
 
@@ -1809,7 +2006,14 @@ export function AdminPosView() {
                             ) : null}
                             {!editingItemId && ['sent', 'pending_preparation'].includes(item.operationalStatus) ? (
                               <>
-                                <button type="button" onClick={() => setReplaceTargetItemId(item.id)} className={ghostButtonClassName}>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setAddItemMode('menu');
+                                    setReplaceTargetItemId(item.id);
+                                  }}
+                                  className={ghostButtonClassName}
+                                >
                                   Reemplazar
                                 </button>
                                 <button type="button" onClick={() => void handleCancelItem(item)} className={dangerButtonClassName}>
@@ -1948,7 +2152,8 @@ export function AdminPosView() {
         <PreparationQueuePanel
           areaLabel="Cocina"
           busyAction={busyAction}
-          items={kitchenQueue}
+          directDispatchSourceKeys={kitchenDirectDispatchSourceKeys}
+          items={sortedKitchenQueue}
           onMoveStatus={handleMovePrepStatus}
           title="Cola de cocina"
         />
@@ -1958,7 +2163,8 @@ export function AdminPosView() {
         <PreparationQueuePanel
           areaLabel="Bar"
           busyAction={busyAction}
-          items={barQueue}
+          directDispatchSourceKeys={directDispatchSourceKeys}
+          items={sortedBarQueue}
           onMoveStatus={handleMovePrepStatus}
           title="Cola de bebidas"
         />
@@ -2015,6 +2221,59 @@ export function AdminPosView() {
                   <SummaryPill label="Pagado" value={formatCurrency(selectedCashierOrder.summary.totalPaid)} />
                   <SummaryPill label="Saldo" value={formatCurrency(selectedCashierOrder.summary.remainingBalance)} />
                 </div>
+
+                <details className="mt-5 rounded-[1.2rem] border border-white/8 bg-white/[0.02] p-4">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
+                    <div>
+                      <p className="text-[0.68rem] uppercase tracking-[0.22em] text-cyanGlow/75">Productos en cuenta</p>
+                      <p className="mt-2 text-sm text-mist">
+                        {cashierProductGroups.reduce((sum, group) => sum + group.quantity, 0)} unidad(es) en {cashierProductGroups.length} producto(s)
+                      </p>
+                    </div>
+                    <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-[0.65rem] uppercase tracking-[0.22em] text-mist">
+                      Ver
+                    </span>
+                  </summary>
+                  <div className="mt-4 space-y-2">
+                    {cashierProductGroups.map((group) => {
+                        const voidTarget = group.items.find((item) => ['in_process', 'ready', 'picking_up', 'delivered'].includes(item.operationalStatus)) ?? null;
+                        const canVoidItem =
+                          canVoidProcessedItems &&
+                          voidTarget != null &&
+                          !selectedOrderHasPendingPayment;
+
+                        return (
+                          <article key={group.key} className="rounded-[1rem] border border-white/8 bg-black/15 px-3 py-3">
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                              <div>
+                                <p className="font-medium text-ivory">
+                                  {group.quantity} × {group.productName}
+                                </p>
+                                <p className="mt-1 text-sm text-mist">
+                                  {formatCurrency(group.totalPrice)} · {itemStatusLabels[group.operationalStatus]}
+                                </p>
+                                {group.notes ? <p className="mt-1 text-sm text-amberGlow">{group.notes}</p> : null}
+                                {group.items.length > 1 ? <p className="mt-1 text-xs text-cyanGlow/70">Agrupa {group.items.length} tanda(s)</p> : null}
+                              </div>
+                              {voidTarget ? (
+                                <button
+                                  type="button"
+                                  onClick={() => void handleVoidProcessedItem(voidTarget)}
+                                  disabled={!canVoidItem || Boolean(busyAction)}
+                                  className="rounded-full border border-rose-300/18 bg-transparent px-3 py-1.5 text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-rose-100/75 transition hover:border-rose-300/35 hover:bg-rose-300/8 hover:text-rose-50 disabled:cursor-not-allowed disabled:opacity-40"
+                                >
+                                  Anular 1
+                                </button>
+                              ) : null}
+                            </div>
+                          </article>
+                        );
+                      })}
+                    {!cashierProductGroups.length ? (
+                      <EmptyState message="Esta cuenta no tiene productos activos para mostrar." />
+                    ) : null}
+                  </div>
+                </details>
 
                 <div className="mt-5 grid gap-3 md:grid-cols-2">
                   <Field label="Modo">
@@ -2237,7 +2496,7 @@ export function AdminPosView() {
                 <div className="rounded-[1.2rem] border border-white/8 bg-white/[0.02] p-4">
                   <p className="text-[0.68rem] uppercase tracking-[0.22em] text-cyanGlow/75">Ventas pagadas de la jornada actual</p>
                   <div className="mt-3 space-y-3">
-                    {activeSalesSessionClosedSales.map((order) => (
+                    {activeSalesSessionPaidClosedSales.map((order) => (
                       <details key={`active-${order.id}`} className="rounded-[1.2rem] border border-white/8 bg-black/15 p-4">
                         <summary className="list-none cursor-pointer">
                           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -2304,7 +2563,7 @@ export function AdminPosView() {
                         </div>
                       </details>
                     ))}
-                    {!activeSalesSessionClosedSales.length ? <EmptyState message="Todavia no hay ventas pagadas cerradas dentro de la jornada vigente." /> : null}
+                    {!activeSalesSessionPaidClosedSales.length ? <EmptyState message="Todavia no hay ventas pagadas cerradas dentro de la jornada vigente." /> : null}
                   </div>
                 </div>
 
@@ -2410,7 +2669,7 @@ export function AdminPosView() {
                             Mesas:{' '}
                             {selectedHistoricalSession?.id === session.id
                               ? selectedHistoricalSessionSales.length
-                              : closedSales.filter((order) => order.salesSessionId === session.id).length}
+                              : closedSales.filter((order) => order.salesSessionId === session.id && isPaidClosedSale(order)).length}
                           </p>
                           <p>Productos: {session.summary?.products.reduce((sum, item) => sum + item.quantity, 0) ?? 0}</p>
                         </div>
@@ -3001,12 +3260,14 @@ function playRealtimeTone(audioContext: AudioContext | null, tone: RealtimeSigna
 function PreparationQueuePanel({
   areaLabel,
   busyAction,
+  directDispatchSourceKeys,
   items,
   onMoveStatus,
   title,
 }: {
   areaLabel: string;
   busyAction: string | null;
+  directDispatchSourceKeys: Set<string>;
   items: PosOrderItem[];
   onMoveStatus: (item: PosOrderItem, nextStatus: 'in_process' | 'ready') => Promise<void>;
   title: string;
@@ -3015,7 +3276,10 @@ function PreparationQueuePanel({
     <section className="mt-8">
       <Panel title={title} subtitle={`Solo ves la cola operativa que corresponde a ${areaLabel.toLowerCase()}. Cada producto muestra su mesa y origen para facilitar el pickup.`}>
         <div className="space-y-3">
-          {items.map((item) => (
+          {items.map((item) => {
+            const isDirectDispatch = item.menuItemSourceKey ? directDispatchSourceKeys.has(item.menuItemSourceKey) : false;
+
+            return (
             <article key={item.id} className="rounded-[1.2rem] border border-white/8 bg-white/[0.02] p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
@@ -3033,7 +3297,14 @@ function PreparationQueuePanel({
                     ) : null}
                     <span className="text-xs uppercase tracking-[0.18em] text-cyanGlow/75">Tanda {item.serviceRound}</span>
                   </div>
-                  <p className="mt-2 text-sm text-mist">Estado: {itemStatusLabels[item.operationalStatus]}</p>
+                  <p className="mt-2 flex flex-wrap items-center gap-2 text-sm text-mist">
+                    <span>Estado: {itemStatusLabels[item.operationalStatus]}</span>
+                    {isDirectDispatch ? (
+                      <span className="rounded-full border border-emerald-300/30 bg-emerald-300/10 px-2.5 py-0.5 text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-emerald-100">
+                        Despacho directo
+                      </span>
+                    ) : null}
+                  </p>
                   <p className="mt-2 text-sm text-mist">
                     Pedido por {item.orderOpenedByEmail ?? item.createdByEmail}
                     {item.orderAssignedStaffEmail ? ` · asignado a ${item.orderAssignedStaffEmail}` : ''}
@@ -3042,8 +3313,13 @@ function PreparationQueuePanel({
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {['pending_preparation', 'sent'].includes(item.operationalStatus) ? (
-                    <button type="button" onClick={() => void onMoveStatus(item, 'in_process')} disabled={Boolean(busyAction)} className={ghostButtonClassName}>
-                      En proceso
+                    <button
+                      type="button"
+                      onClick={() => void onMoveStatus(item, isDirectDispatch ? 'ready' : 'in_process')}
+                      disabled={Boolean(busyAction)}
+                      className={isDirectDispatch ? primaryButtonClassName : ghostButtonClassName}
+                    >
+                      {isDirectDispatch ? 'Marcar listo' : 'En proceso'}
                     </button>
                   ) : null}
                   {item.operationalStatus === 'in_process' ? (
@@ -3054,7 +3330,8 @@ function PreparationQueuePanel({
                 </div>
               </div>
             </article>
-          ))}
+            );
+          })}
           {!items.length ? <EmptyState message="No hay productos pendientes en esta cola por ahora." /> : null}
         </div>
       </Panel>
@@ -3392,6 +3669,16 @@ interface SelectablePaymentUnit {
   unitKey: string;
 }
 
+interface CashierProductGroup {
+  items: PosOrderItem[];
+  key: string;
+  notes: string;
+  operationalStatus: PosOrderItem['operationalStatus'];
+  productName: string;
+  quantity: number;
+  totalPrice: number;
+}
+
 function isPaymentUnitKey(value: string) {
   return value.includes('::');
 }
@@ -3476,6 +3763,52 @@ function buildSelectablePaymentUnits(order: PosOrderWithRelations | null, outsta
   }
 
   return units;
+}
+
+function buildCashierProductGroups(order: PosOrderWithRelations | null) {
+  if (!order) {
+    return [] as CashierProductGroup[];
+  }
+
+  const groups = new Map<string, CashierProductGroup>();
+
+  for (const item of order.items) {
+    if (item.operationalStatus === 'cancelled') {
+      continue;
+    }
+
+    const normalizedNotes = item.notes?.trim() ?? '';
+    const key = [
+      item.menuItemSourceKey ?? item.productSlug,
+      item.productName,
+      item.unitPrice,
+      item.operationalStatus,
+      normalizedNotes,
+    ].join('::');
+    const existing = groups.get(key);
+
+    if (existing) {
+      existing.items.push(item);
+      existing.quantity += item.quantity;
+      existing.totalPrice += item.totalPrice;
+    } else {
+      groups.set(key, {
+        items: [item],
+        key,
+        notes: normalizedNotes,
+        operationalStatus: item.operationalStatus,
+        productName: item.productName,
+        quantity: item.quantity,
+        totalPrice: item.totalPrice,
+      });
+    }
+  }
+
+  return Array.from(groups.values()).sort((left, right) => {
+    const leftCreatedAt = left.items[0]?.createdAt ?? '';
+    const rightCreatedAt = right.items[0]?.createdAt ?? '';
+    return leftCreatedAt.localeCompare(rightCreatedAt);
+  });
 }
 
 function buildPendingPreparationListsFromTables(tables: PosTableWithOrder[]) {
@@ -3667,9 +4000,14 @@ function isPosPaymentArray(entries: PosPayment[] | PosSalesSessionSummary['payme
   return entries.length > 0 && 'status' in entries[0];
 }
 
+function isPaidClosedSale(order: PosOrderWithRelations) {
+  return order.closedAt != null && order.financialStatus === 'paid_total' && order.summary.totalDue > 0;
+}
+
 function formatPosEventLabel(eventType: string) {
   const labels: Record<string, string> = {
     items_added: 'Productos agregados',
+    custom_item_added: 'Extra agregado',
     item_cancelled: 'Producto cancelado',
     item_delivered: 'Producto entregado',
     item_marked_in_process: 'Producto en proceso',
@@ -3678,6 +4016,7 @@ function formatPosEventLabel(eventType: string) {
     item_payment_status_updated: 'Estado de pago actualizado',
     item_replaced: 'Producto reemplazado',
     item_updated: 'Producto actualizado',
+    item_voided_after_process: 'Producto anulado por excepcion',
     order_reconciled: 'Cuenta reconciliada',
     payment_recorded: 'Pago registrado',
     sales_session_closed: 'Jornada cerrada',
@@ -3729,6 +4068,44 @@ function resolveReplacementAnchorTimestamp(item: PosOrderItem, itemsById: Map<st
 
 function resolvePreparationQueueTimestampForUi(item: PosOrderItem) {
   return item.sentAt ?? item.createdAt;
+}
+
+function sortPreparationQueueForUi(items: PosOrderItem[], directDispatchSourceKeys: Set<string>) {
+  return [...items].sort((left, right) => {
+    const priorityDifference = getPreparationQueuePriorityForUi(left, directDispatchSourceKeys) - getPreparationQueuePriorityForUi(right, directDispatchSourceKeys);
+
+    if (priorityDifference !== 0) {
+      return priorityDifference;
+    }
+
+    return resolvePreparationQueueTimestampForUi(left).localeCompare(resolvePreparationQueueTimestampForUi(right));
+  });
+}
+
+function getPreparationQueuePriorityForUi(item: PosOrderItem, directDispatchSourceKeys: Set<string>) {
+  if (item.operationalStatus === 'in_process') {
+    return 0;
+  }
+
+  const isDirectDispatch = item.menuItemSourceKey ? directDispatchSourceKeys.has(item.menuItemSourceKey) : false;
+
+  if (['pending_preparation', 'sent'].includes(item.operationalStatus) && isDirectDispatch) {
+    return 1;
+  }
+
+  if (['pending_preparation', 'sent'].includes(item.operationalStatus)) {
+    return 2;
+  }
+
+  if (item.operationalStatus === 'picking_up') {
+    return 3;
+  }
+
+  if (item.operationalStatus === 'ready') {
+    return 4;
+  }
+
+  return 5;
 }
 
 function getPosFallbackSyncInterval(tab: WorkspaceTab) {

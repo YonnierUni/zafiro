@@ -1,5 +1,6 @@
 import type { RealtimeChannel, RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 import type {
+  AddCustomOrderItemInput,
   AddOrderItemInput,
   CreatePosTableInput,
   OrderFinancialStatus,
@@ -345,6 +346,64 @@ export async function addItemsToTableInSupabase(tableId: string, items: AddOrder
   return data?.map(mapPosOrderItemRow) ?? [];
 }
 
+export async function addCustomItemToTableInSupabase(tableId: string, item: AddCustomOrderItemInput, actor: PosActorContext) {
+  const productName = item.productName.trim();
+  const quantity = Math.max(Math.floor(item.quantity), 0);
+  const unitPrice = normalizeMoney(item.unitPrice);
+
+  if (!productName) {
+    throw new Error('El extra debe tener un nombre.');
+  }
+
+  if (quantity <= 0) {
+    throw new Error('La cantidad del extra debe ser mayor que cero.');
+  }
+
+  if (unitPrice <= 0) {
+    throw new Error('El precio unitario del extra debe ser mayor que cero.');
+  }
+
+  const supabase = getSupabaseClient();
+  const table = await getTableById(tableId);
+  const order = await ensureOpenOrderForTable(table, actor);
+  const existingItems = await loadOrderItems(order.id);
+  const nextRound = Math.max(0, ...existingItems.map((entry) => entry.serviceRound)) + 1;
+  const { data, error } = await supabase
+    .from('pos_order_items')
+    .insert({
+      order_id: order.id,
+      menu_item_source_key: null,
+      product_name: productName,
+      product_slug: `extra-${slugifyForPos(productName)}`,
+      prep_area: item.prepArea,
+      quantity,
+      unit_price: unitPrice,
+      total_price: unitPrice * quantity,
+      service_round: nextRound,
+      operational_status: 'draft',
+      financial_status: 'pending_payment',
+      notes: item.notes?.trim() ?? '',
+      created_by_email: actor.email,
+      updated_by_email: actor.email,
+    } as never)
+    .select('*')
+    .single();
+
+  throwIfError(error, 'No fue posible agregar el extra a la mesa');
+
+  await touchTableOccupation(order.tableId, order.id, actor.email);
+  await insertPosLog({
+    actor,
+    afterData: data,
+    eventType: 'custom_item_added',
+    notes: `${quantity} extra(s): ${productName}`,
+    orderId: order.id,
+    tableId: order.tableId,
+  });
+
+  return mapPosOrderItemRow(data);
+}
+
 export async function updateOrderItemInSupabase(itemId: string, patch: UpdateOrderItemInput, actor: PosActorContext, currentItemOverride?: PosOrderItem) {
   const currentItem = currentItemOverride ?? (await getOrderItemById(itemId));
 
@@ -502,6 +561,148 @@ export async function cancelOrderItemInSupabase(itemId: string, reason: string, 
   return mapPosOrderItemRow(data);
 }
 
+export async function voidProcessedOrderItemInSupabase(
+  itemId: string,
+  reason: string,
+  actor: PosActorContext,
+  currentItemOverride?: PosOrderItem,
+  voidQuantity = 1,
+) {
+  ensureCanVoidProcessedItem(actor.roles);
+
+  const normalizedReason = reason.trim();
+  if (!normalizedReason) {
+    throw new Error('Debes escribir un motivo claro para la anulacion extraordinaria.');
+  }
+
+  const currentItem = currentItemOverride ?? (await getOrderItemById(itemId));
+  if (currentItem.operationalStatus === 'cancelled') {
+    throw new Error('Esta linea ya esta cancelada.');
+  }
+
+  if (CONTROLLED_CANCEL_STATUSES.has(currentItem.operationalStatus)) {
+    throw new Error('Esta linea aun puede manejarse con la cancelacion operativa normal.');
+  }
+
+  const normalizedVoidQuantity = Math.max(Math.floor(voidQuantity), 1);
+  if (normalizedVoidQuantity > currentItem.quantity) {
+    throw new Error('No puedes anular mas unidades de las que tiene esta linea.');
+  }
+
+  const orderBundle = await loadOrderBundle(currentItem.orderId);
+  const pendingPayments = orderBundle.payments.filter((payment) => payment.status === 'pending');
+  if (pendingPayments.length > 0) {
+    throw new Error('Esta cuenta tiene pagos pendientes por validar. Confirma o rechaza esos pagos antes de anular productos por excepcion.');
+  }
+
+  const confirmedPayments = orderBundle.payments.filter((payment) => payment.status === 'confirmed');
+  const itemHasConfirmedTargetedPayment = confirmedPayments.some(
+    (payment) => payment.allocationMode === 'items' && payment.targetItemIds?.some((target) => parsePaymentTargetItemId(target) === currentItem.id),
+  );
+  if (itemHasConfirmedTargetedPayment) {
+    throw new Error('Este producto ya tiene un pago confirmado aplicado directamente. Primero resuelve el pago antes de anularlo.');
+  }
+
+  const voidedAmount = currentItem.unitPrice * normalizedVoidQuantity;
+  const nextBillableTotal = orderBundle.items
+    .filter((item) => item.operationalStatus !== 'cancelled' && item.financialStatus !== 'cancelled')
+    .reduce((sum, item) => sum + item.totalPrice, 0) - voidedAmount;
+  const confirmedTotal = confirmedPayments.reduce((sum, payment) => sum + payment.amountApplied, 0);
+  if (confirmedTotal > nextBillableTotal) {
+    throw new Error('Anular este producto dejaria la cuenta sobrepagada. Hace falta resolver una devolucion o ajuste de pago antes.');
+  }
+
+  const supabase = getSupabaseClient();
+  const now = new Date().toISOString();
+  let updatedRows: PosOrderItemRow[];
+
+  if (normalizedVoidQuantity === currentItem.quantity) {
+    const { data, error } = await supabase
+      .from('pos_order_items')
+      .update({
+        cancellation_reason: normalizedReason,
+        cancelled_at: now,
+        cancelled_by_email: actor.email,
+        financial_status: 'cancelled',
+        operational_status: 'cancelled',
+        updated_by_email: actor.email,
+      } as never)
+      .eq('id', itemId)
+      .not('operational_status', 'eq', 'cancelled')
+      .select('*')
+      .single();
+
+    throwIfError(error, 'No fue posible anular el producto por excepcion');
+    updatedRows = [data];
+  } else {
+    const remainingQuantity = currentItem.quantity - normalizedVoidQuantity;
+    const { data: activeLine, error: activeLineError } = await supabase
+      .from('pos_order_items')
+      .update({
+        quantity: remainingQuantity,
+        total_price: currentItem.unitPrice * remainingQuantity,
+        updated_by_email: actor.email,
+      } as never)
+      .eq('id', itemId)
+      .not('operational_status', 'eq', 'cancelled')
+      .select('*')
+      .single();
+
+    throwIfError(activeLineError, 'No fue posible ajustar la cantidad activa del producto');
+
+    const { data: cancelledUnit, error: cancelledUnitError } = await supabase
+      .from('pos_order_items')
+      .insert({
+        cancelled_at: now,
+        cancelled_by_email: actor.email,
+        cancellation_reason: normalizedReason,
+        created_by_email: actor.email,
+        delivered_at: currentItem.deliveredAt,
+        delivered_by_email: currentItem.deliveredByEmail,
+        financial_status: 'cancelled',
+        menu_item_source_key: currentItem.menuItemSourceKey,
+        notes: currentItem.notes ?? '',
+        operational_status: 'cancelled',
+        order_id: currentItem.orderId,
+        picking_up_at: currentItem.pickingUpAt,
+        picking_up_by_email: currentItem.pickingUpByEmail,
+        prep_area: currentItem.prepArea,
+        preparation_started_at: currentItem.preparationStartedAt,
+        product_name: currentItem.productName,
+        product_slug: currentItem.productSlug,
+        quantity: normalizedVoidQuantity,
+        ready_at: currentItem.readyAt,
+        replacement_for_item_id: currentItem.id,
+        sent_at: currentItem.sentAt,
+        service_round: currentItem.serviceRound,
+        total_price: voidedAmount,
+        unit_price: currentItem.unitPrice,
+        updated_by_email: actor.email,
+      } as never)
+      .select('*')
+      .single();
+
+    throwIfError(cancelledUnitError, 'No fue posible registrar la unidad anulada');
+    updatedRows = [activeLine, cancelledUnit];
+  }
+
+  await reconcileOrderState(currentItem.orderId, actor.email);
+  await insertPosLog({
+    actor,
+    afterData: {
+      rows: updatedRows,
+      voidedQuantity: normalizedVoidQuantity,
+    },
+    beforeData: currentItem,
+    eventType: 'item_voided_after_process',
+    notes: normalizedReason,
+    orderId: currentItem.orderId,
+    orderItemId: currentItem.id,
+  });
+
+  return updatedRows.map(mapPosOrderItemRow);
+}
+
 export async function sendDraftItemsToPreparationInSupabase(orderId: string, actor: PosActorContext) {
   const supabase = getSupabaseClient();
   const draftItems = await loadOrderItems(orderId);
@@ -547,7 +748,12 @@ export async function transitionPreparationItemInSupabase(
   const item = currentItemOverride ?? (await getOrderItemById(itemId));
   ensurePreparationPermission(item, actor.roles);
 
-  const allowedCurrent = nextStatus === 'in_process' ? ['pending_preparation', 'sent'] : ['in_process'];
+  const isDirectDispatch = await isRegisteredBeverageItem(item);
+  const allowedCurrent = nextStatus === 'in_process'
+    ? ['pending_preparation', 'sent']
+    : isDirectDispatch
+      ? ['pending_preparation', 'sent', 'in_process']
+      : ['in_process'];
   if (!allowedCurrent.includes(item.operationalStatus)) {
     throw new Error('La linea no esta en un estado valido para ese movimiento operativo.');
   }
@@ -1292,6 +1498,14 @@ function ensureCanMoveActiveOrder(roles: StaffRole[]) {
   throw new Error('Tu rol actual no puede mover cuentas entre mesas.');
 }
 
+function ensureCanVoidProcessedItem(roles: StaffRole[]) {
+  if (roles.includes('superadmin') || roles.includes('cashier')) {
+    return;
+  }
+
+  throw new Error('Tu rol actual no puede anular productos por excepcion.');
+}
+
 function derivePreparationAreaFromProductType(productType: string): PreparationArea {
   const normalized = productType.trim().toLowerCase();
   if (BAR_PRODUCT_TYPES.has(normalized)) {
@@ -1301,6 +1515,22 @@ function derivePreparationAreaFromProductType(productType: string): PreparationA
     return 'kitchen';
   }
   return 'bar';
+}
+
+async function isRegisteredBeverageItem(item: PosOrderItem) {
+  if (!item.menuItemSourceKey) {
+    return false;
+  }
+
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from('menu_items_public')
+    .select('tipo')
+    .eq('source_key', item.menuItemSourceKey)
+    .maybeSingle();
+
+  throwIfError(error, 'No fue posible validar el flujo operativo del producto');
+  return data?.tipo?.trim().toLowerCase() === 'bebidas';
 }
 
 function resolvePreparationQueueTimestamp(item: PosOrderItem) {
@@ -1678,6 +1908,17 @@ function normalizeMoney(value: number | undefined) {
   }
 
   return Math.max(Math.round(value), 0);
+}
+
+function slugifyForPos(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80) || 'producto-extra';
 }
 
 function parseSalesSessionSummary(value: Record<string, unknown> | null): PosSalesSessionSummary | null {

@@ -190,6 +190,8 @@ export function AdminPosView() {
   const cashierPaymentPanelRef = useRef<HTMLDivElement | null>(null);
   const floorWorkspacePanelRef = useRef<HTMLDivElement | null>(null);
   const mobileTableSheetHeaderRef = useRef<HTMLDivElement | null>(null);
+  const tableButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const closeTableSheetFocusRef = useRef(false);
   const addItemFormRef = useRef<HTMLDivElement | null>(null);
   const pendingPaymentCardRefs = useRef<Record<string, HTMLElement | null>>({});
   const orderItemCardRefs = useRef<Record<string, HTMLElement | null>>({});
@@ -851,6 +853,26 @@ export function AdminPosView() {
   }, [activeTab, selectedTableId, isTableSheetOpen]);
 
   useEffect(() => {
+    if (!closeTableSheetFocusRef.current || activeTab !== 'floor' || !selectedTableId || isTableSheetOpen) {
+      return;
+    }
+
+    closeTableSheetFocusRef.current = false;
+
+    const tableButton = tableButtonRefs.current[selectedTableId];
+    if (!tableButton) {
+      return;
+    }
+
+    const focusAndReveal = window.requestAnimationFrame(() => {
+      tableButton.focus({ preventScroll: true });
+      tableButton.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+
+    return () => window.cancelAnimationFrame(focusAndReveal);
+  }, [activeTab, selectedTableId, isTableSheetOpen]);
+
+  useEffect(() => {
     if (cashierRightPanel !== 'validations' || !highlightedPendingPaymentId) {
       return;
     }
@@ -1469,6 +1491,7 @@ export function AdminPosView() {
 
     resetReplacementMode();
     setIsCloseDraftWarningOpen(false);
+    closeTableSheetFocusRef.current = true;
     setIsTableSheetOpen(false);
   };
 
@@ -1869,6 +1892,9 @@ export function AdminPosView() {
                   return (
                     <button
                       key={table.id}
+                      ref={(element) => {
+                        tableButtonRefs.current[table.id] = element;
+                      }}
                       type="button"
                       onClick={() => {
                         shouldFocusFloorWorkspacePanelRef.current = true;

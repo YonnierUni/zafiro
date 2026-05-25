@@ -189,6 +189,7 @@ export function AdminPosView() {
   const historicalSessionHeaderRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const cashierPaymentPanelRef = useRef<HTMLDivElement | null>(null);
   const floorWorkspacePanelRef = useRef<HTMLDivElement | null>(null);
+  const mobileTableSheetHeaderRef = useRef<HTMLDivElement | null>(null);
   const addItemFormRef = useRef<HTMLDivElement | null>(null);
   const pendingPaymentCardRefs = useRef<Record<string, HTMLElement | null>>({});
   const orderItemCardRefs = useRef<Record<string, HTMLElement | null>>({});
@@ -828,6 +829,26 @@ export function AdminPosView() {
 
     return () => window.cancelAnimationFrame(focusAndReveal);
   }, [activeTab, selectedTableId]);
+
+  useEffect(() => {
+    if (!shouldFocusFloorWorkspacePanelRef.current || activeTab !== 'floor' || !selectedTableId || !isTableSheetOpen) {
+      return;
+    }
+
+    shouldFocusFloorWorkspacePanelRef.current = false;
+
+    const mobileHeader = mobileTableSheetHeaderRef.current;
+    if (!mobileHeader || !window.matchMedia('(max-width: 1279px)').matches) {
+      return;
+    }
+
+    const focusAndReveal = window.requestAnimationFrame(() => {
+      mobileHeader.focus({ preventScroll: true });
+      mobileHeader.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+
+    return () => window.cancelAnimationFrame(focusAndReveal);
+  }, [activeTab, selectedTableId, isTableSheetOpen]);
 
   useEffect(() => {
     if (cashierRightPanel !== 'validations' || !highlightedPendingPaymentId) {
@@ -2252,20 +2273,24 @@ export function AdminPosView() {
                 className="absolute inset-0 overflow-y-auto overscroll-contain border border-white/10 bg-[#0b0b0f] px-4 pb-[max(7.5rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))] shadow-[0_-18px_40px_rgba(0,0,0,0.38)]"
                 style={{ WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' }}
               >
-                <div className="sticky top-0 z-30 -mx-4 -mt-4 mb-4 flex items-center justify-between gap-3 border-b border-white/10 bg-[#0b0b0f] px-4 py-3">
-                  <div>
-                    <p className="text-[0.68rem] uppercase tracking-[0.22em] text-cyanGlow/80">Mesa activa</p>
-                    <p className="mt-2 font-semibold text-ivory">
-                      {selectedTable.name} · {selectedTable.code}
-                    </p>
+                <div
+                  ref={mobileTableSheetHeaderRef}
+                  tabIndex={-1}
+                  className="sticky top-0 left-3 right-3 z-30 mb-4 rounded-[1.7rem] border border-white/10 bg-[#0b0b0f]/95 px-4 py-4 shadow-[0_18px_50px_rgba(0,0,0,0.35)] backdrop-blur-sm"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-[0.7rem] uppercase tracking-[0.24em] text-cyanGlow/80">Mesa activa</p>
+                      <p className="mt-1 truncate text-base font-semibold leading-none text-ivory">{selectedTable.name} · {selectedTable.code}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => closeTableSheet()}
+                      className={`${ghostButtonClassName} rounded-full px-4 py-2 text-sm`}
+                    >
+                      Cerrar
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => closeTableSheet()}
-                    className={ghostButtonClassName}
-                  >
-                    Cerrar
-                  </button>
                 </div>
                 {renderSelectedTableWorkspace()}
               </div>
@@ -2283,17 +2308,20 @@ export function AdminPosView() {
                 </div>
               ) : null}
               {isCloseDraftWarningOpen ? (
-                <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/72 px-4">
-                  <div className="w-full max-w-sm rounded-[1.25rem] border border-amberGlow/30 bg-[#111015] p-4 shadow-[0_18px_44px_rgba(0,0,0,0.42)]">
-                    <p className="text-[0.68rem] font-semibold uppercase tracking-[0.22em] text-amberGlow">Borradores pendientes</p>
+                <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/90 px-4 py-6">
+                  <div className="w-full max-w-sm rounded-[1.6rem] border border-amberGlow/40 bg-[#0d0d11]/95 p-5 shadow-[0_22px_60px_rgba(0,0,0,0.55)] ring-1 ring-amberGlow/15">
+                    <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-amberGlow/10 px-3 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-amberGlow">
+                      Alerta
+                    </div>
+                    <p className="text-[0.7rem] font-semibold uppercase tracking-[0.22em] text-amberGlow">Borradores pendientes</p>
                     <p className="mt-3 text-sm leading-6 text-mist">
                       Hay {selectedOrderDraftItems.length} borrador{selectedOrderDraftItems.length === 1 ? '' : 'es'} sin enviar. No se pierde{selectedOrderDraftItems.length === 1 ? '' : 'n'} al cerrar.
                     </p>
-                    <div className="mt-4 flex flex-wrap gap-2">
+                    <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:justify-end">
                       <button type="button" onClick={() => setIsCloseDraftWarningOpen(false)} className={primaryButtonClassName}>
                         Seguir editando
                       </button>
-                      <button type="button" onClick={() => closeTableSheet({ force: true })} className={ghostButtonClassName}>
+                      <button type="button" onClick={() => closeTableSheet({ force: true })} className={`${ghostButtonClassName} w-full sm:w-auto`}>
                         Cerrar sin enviar
                       </button>
                     </div>

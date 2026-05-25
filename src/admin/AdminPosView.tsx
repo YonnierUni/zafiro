@@ -718,6 +718,16 @@ export function AdminPosView() {
     () => buildLiveSalesSessionSummary(posState?.activeSalesSession ?? null, allCashierOrders),
     [allCashierOrders, posState?.activeSalesSession],
   );
+  const activeSalesSessionCashTotal = useMemo(
+    () => activeSalesSessionSummary.paymentMethods.find((entry) => entry.method === 'cash')?.totalAmount ?? 0,
+    [activeSalesSessionSummary.paymentMethods],
+  );
+  const activeSalesSessionTransferTotal = useMemo(
+    () => activeSalesSessionSummary.paymentMethods
+      .filter((entry) => entry.method !== 'cash')
+      .reduce((sum, entry) => sum + entry.totalAmount, 0),
+    [activeSalesSessionSummary.paymentMethods],
+  );
   const ordersById = useMemo(() => new Map(allCashierOrders.map((order) => [order.id, order])), [allCashierOrders]);
   const tablesById = useMemo(() => new Map((posState?.tables ?? []).map((table) => [table.id, table])), [posState?.tables]);
   const activeSalesSessionOrders = useMemo(() => {
@@ -2779,6 +2789,8 @@ export function AdminPosView() {
                   />
                   <SummaryPill label="Vendido" value={formatCurrency(activeSalesSessionSummary.grossSales)} />
                   <SummaryPill label="Cobrado" value={formatCurrency(activeSalesSessionSummary.totalCollected)} />
+                  <SummaryPill label="Efectivo" value={formatCurrency(activeSalesSessionCashTotal)} />
+                  <SummaryPill label="Transferencias" value={formatCurrency(activeSalesSessionTransferTotal)} />
                   <SummaryPill label="Pendiente" value={formatCurrency(activeSalesSessionSummary.pendingBalance)} />
                   <SummaryPill label="Pagos por validar" value={String(posState?.pendingPayments.length ?? 0)} />
                   <SummaryPill label="Mesas abiertas" value={String(sessionOpenTableCount)} />

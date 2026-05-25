@@ -261,6 +261,8 @@ export function AdminPosView() {
       return;
     }
 
+    const isIos = /iP(ad|hone|od)/.test(window.navigator.platform) ||
+      (window.navigator.platform === 'MacIntel' && window.navigator.maxTouchPoints > 1);
     const scrollY = window.scrollY;
     const previousBodyStyles = {
       height: document.body.style.height,
@@ -282,9 +284,12 @@ export function AdminPosView() {
     document.documentElement.style.overscrollBehavior = 'none';
     document.body.style.height = '100%';
     document.body.style.overflow = 'hidden';
-    document.body.style.position = 'fixed';
-    document.body.style.top = `-${scrollY}px`;
-    document.body.style.width = '100%';
+
+    if (!isIos) {
+      document.body.style.position = 'fixed';
+      document.body.style.top = `-${scrollY}px`;
+      document.body.style.width = '100%';
+    }
 
     if (scrollbarWidth > 0) {
       document.body.style.paddingRight = `${scrollbarWidth}px`;
@@ -300,7 +305,9 @@ export function AdminPosView() {
       document.body.style.position = previousBodyStyles.position;
       document.body.style.top = previousBodyStyles.top;
       document.body.style.width = previousBodyStyles.width;
-      window.scrollTo(0, scrollY);
+      if (!isIos) {
+        window.scrollTo(0, scrollY);
+      }
     };
   }, [isMoveTableModalOpen, isTableSheetOpen]);
 
@@ -2240,7 +2247,7 @@ export function AdminPosView() {
           </div>
 
           {isTableSheetOpen && selectedTable ? (
-            <div className="fixed inset-0 z-50 overflow-hidden overscroll-none bg-[#0b0b0f] xl:hidden" style={{ touchAction: 'none' }}>
+            <div className="fixed inset-0 z-50 overflow-hidden overscroll-none bg-[#0b0b0f] xl:hidden">
               <div
                 className="absolute inset-0 overflow-y-auto overscroll-contain border border-white/10 bg-[#0b0b0f] px-4 pb-[max(7.5rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))] shadow-[0_-18px_40px_rgba(0,0,0,0.38)]"
                 style={{ WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' }}

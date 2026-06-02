@@ -10,6 +10,7 @@ import type {
   PaymentMethod,
   PosOrderItem,
   PosOrderWithRelations,
+  PosOperationalFlowSettings,
   PosPayment,
   PosProductOption,
   PosSalesSession,
@@ -26,6 +27,7 @@ import {
   cancelOrderItemInSupabase,
   closeActiveSalesSessionInSupabase,
   createPosTableInSupabase,
+  defaultPosOperationalFlowSettings,
   deletePosTableInSupabase,
   loadPosProductOptionsFromSupabase,
   loadPosStateFromSupabase,
@@ -41,11 +43,12 @@ import {
   transitionPreparationItemInSupabase,
   updateOrderItemInSupabase,
   updatePosPaymentStatusInSupabase,
+  updatePosOperationalFlowSettingsInSupabase,
   voidProcessedOrderItemInSupabase,
   type PosRealtimeEvent,
 } from '../integrations/supabase/posOperationsRepository';
 
-type WorkspaceTab = 'floor' | 'kitchen' | 'bar' | 'cashier';
+type WorkspaceTab = 'floor' | 'kitchen' | 'bar' | 'cashier' | 'settings';
 type CashierRightPanel = 'summary' | 'previous_sessions' | 'validations' | 'movements';
 type AddItemMode = 'menu' | 'extra';
 
@@ -62,6 +65,7 @@ const workspaceLabels: Record<WorkspaceTab, string> = {
   kitchen: 'Cocina',
   bar: 'Bar',
   cashier: 'Caja',
+  settings: 'Ajustes',
 };
 
 const tableStatusLabels: Record<PosTableWithOrder['status'], string> = {
@@ -122,6 +126,7 @@ export function AdminPosView() {
   const canOperateKitchen = actor.roles.includes('superadmin') || hasRole('kitchen');
   const canOperateBar = actor.roles.includes('superadmin') || hasRole('bar');
   const canOperateCashier = actor.roles.includes('superadmin') || hasRole('cashier');
+  const canManagePosSettings = actor.roles.includes('superadmin');
   const shouldShowTableSummary = actor.roles.includes('superadmin') || canOperateCashier;
   const shouldShowFloorSidebar = actor.roles.includes('superadmin') || canOperateCashier;
   const showFinancialBadgeInProducts = actor.roles.includes('superadmin') || canOperateCashier;
@@ -136,8 +141,9 @@ export function AdminPosView() {
         canOperateKitchen ? 'kitchen' : null,
         canOperateBar ? 'bar' : null,
         canOperateCashier ? 'cashier' : null,
+        canManagePosSettings ? 'settings' : null,
       ].filter((tab): tab is WorkspaceTab => tab != null),
-    [canOperateBar, canOperateCashier, canOperateFloor, canOperateKitchen],
+    [canManagePosSettings, canOperateBar, canOperateCashier, canOperateFloor, canOperateKitchen],
   );
 
   const [activeTab, setActiveTab] = useState<WorkspaceTab>('floor');
@@ -181,6 +187,7 @@ export function AdminPosView() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [busyAction, setBusyAction] = useState<string | null>(null);
+  const [savingOperationalFlowArea, setSavingOperationalFlowArea] = useState<PosOrderItem['prepArea'] | null>(null);
   const [highlightedOrderItemId, setHighlightedOrderItemId] = useState<string | null>(null);
   const realtimeTimerRef = useRef<number | null>(null);
   const trailingSyncTimerRef = useRef<number | null>(null);
@@ -665,13 +672,20 @@ export function AdminPosView() {
 
   const kitchenQueue = posState?.pendingPreparationKitchen ?? [];
   const barQueue = posState?.pendingPreparationBar ?? [];
+  const operationalFlowSettings = posState?.operationalFlowSettings ?? defaultPosOperationalFlowSettings;
   const kitchenDirectDispatchSourceKeys = useMemo(() => new Set<string>(), []);
   const directDispatchSourceKeys = useMemo(
     () => new Set(products.filter((product) => product.type.trim().toLowerCase() === 'bebidas').map((product) => product.sourceKey)),
     [products],
   );
-  const sortedKitchenQueue = useMemo(() => sortPreparationQueueForUi(kitchenQueue, kitchenDirectDispatchSourceKeys), [kitchenDirectDispatchSourceKeys, kitchenQueue]);
-  const sortedBarQueue = useMemo(() => sortPreparationQueueForUi(barQueue, directDispatchSourceKeys), [barQueue, directDispatchSourceKeys]);
+  const sortedKitchenQueue = useMemo(
+    () => sortPreparationQueueForUi(kitchenQueue, kitchenDirectDispatchSourceKeys, operationalFlowSettings),
+    [kitchenDirectDispatchSourceKeys, kitchenQueue, operationalFlowSettings],
+  );
+  const sortedBarQueue = useMemo(
+    () => sortPreparationQueueForUi(barQueue, directDispatchSourceKeys, operationalFlowSettings),
+    [barQueue, directDispatchSourceKeys, operationalFlowSettings],
+  );
   const allCashierOrders = useMemo(() => [...(posState?.openOrders ?? []), ...closedSales], [closedSales, posState?.openOrders]);
   const selectedReadyCount = selectedOrder?.items.filter((item) => item.operationalStatus === 'ready').length ?? 0;
   const selectedPickingUpCount = selectedOrder?.items.filter((item) => item.operationalStatus === 'picking_up').length ?? 0;
@@ -1061,6 +1075,51 @@ export function AdminPosView() {
       setErrorMessage(error instanceof Error ? error.message : `No fue posible completar: ${label}`);
     } finally {
       setBusyAction(null);
+    }
+  };
+
+  const handleToggleOperationalFlowSetting = async (
+    area: PosOrderItem['prepArea'],
+    field: keyof PosOperationalFlowSettings[PosOrderItem['prepArea']],
+    value: boolean,
+  ) => {
+    const currentAreaSettings = operationalFlowSettings[area];
+    const nextAreaSettings = {
+      ...currentAreaSettings,
+      [field]: value,
+    };
+
+    setSavingOperationalFlowArea(area);
+    try {
+      await executeAction(
+        'Configuracion operativa actualizada',
+        async () =>
+          updatePosOperationalFlowSettingsInSupabase(
+            {
+              area,
+              useInProcess: nextAreaSettings.useInProcess,
+              usePickingUp: nextAreaSettings.usePickingUp,
+            },
+            actor,
+          ),
+        {
+          onSuccess: () => {
+            setPosState((current) =>
+              current
+                ? {
+                    ...current,
+                    operationalFlowSettings: {
+                      ...current.operationalFlowSettings,
+                      [area]: nextAreaSettings,
+                    },
+                  }
+                : current,
+            );
+          },
+        },
+      );
+    } finally {
+      setSavingOperationalFlowArea(null);
     }
   };
 
@@ -1801,9 +1860,15 @@ export function AdminPosView() {
                       </>
                     ) : null}
                     {!editingItemId && item.operationalStatus === 'ready' ? (
-                      <button type="button" onClick={() => void handlePickingUp(item)} className={ghostButtonClassName}>
-                        Ir a recoger
-                      </button>
+                      shouldUsePickingUpStep(item, operationalFlowSettings) ? (
+                        <button type="button" onClick={() => void handlePickingUp(item)} className={ghostButtonClassName}>
+                          Ir a recoger
+                        </button>
+                      ) : (
+                        <button type="button" onClick={() => void handleDelivered(item)} className={primaryButtonClassName}>
+                          Marcar entregado
+                        </button>
+                      )
                     ) : null}
                     {!editingItemId && item.operationalStatus === 'picking_up' ? (
                       <button type="button" onClick={() => void handleDelivered(item)} className={primaryButtonClassName}>
@@ -2310,9 +2375,15 @@ export function AdminPosView() {
                               </>
                             ) : null}
                             {!editingItemId && item.operationalStatus === 'ready' ? (
-                              <button type="button" onClick={() => void handlePickingUp(item)} className={ghostButtonClassName}>
-                                Ir a recoger
-                              </button>
+                              shouldUsePickingUpStep(item, operationalFlowSettings) ? (
+                                <button type="button" onClick={() => void handlePickingUp(item)} className={ghostButtonClassName}>
+                                  Ir a recoger
+                                </button>
+                              ) : (
+                                <button type="button" onClick={() => void handleDelivered(item)} className={primaryButtonClassName}>
+                                  Marcar entregado
+                                </button>
+                              )
                             ) : null}
                             {!editingItemId && item.operationalStatus === 'picking_up' ? (
                               <button type="button" onClick={() => void handleDelivered(item)} className={primaryButtonClassName}>
@@ -2488,6 +2559,7 @@ export function AdminPosView() {
           directDispatchSourceKeys={kitchenDirectDispatchSourceKeys}
           items={sortedKitchenQueue}
           onMoveStatus={handleMovePrepStatus}
+          operationalFlowSettings={operationalFlowSettings}
           title="Cola de cocina"
         />
       ) : null}
@@ -2499,8 +2571,26 @@ export function AdminPosView() {
           directDispatchSourceKeys={directDispatchSourceKeys}
           items={sortedBarQueue}
           onMoveStatus={handleMovePrepStatus}
+          operationalFlowSettings={operationalFlowSettings}
           title="Cola de bebidas"
         />
+      ) : null}
+
+      {activeTab === 'settings' && canManagePosSettings ? (
+        <section className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,0.34fr)]">
+          <OperationalFlowSettingsPanel
+            busyAction={busyAction}
+            onToggle={handleToggleOperationalFlowSetting}
+            savingArea={savingOperationalFlowArea}
+            settings={operationalFlowSettings}
+          />
+          <Panel title="Alcance" subtitle="Estos ajustes cambian como avanza la operacion, no los productos ni las cuentas ya cobradas.">
+            <div className="space-y-3 text-sm leading-6 text-mist">
+              <p>Cuando un paso esta apagado, los botones saltan al siguiente estado operativo.</p>
+              <p>Los productos que ya esten en un estado intermedio se pueden terminar normalmente.</p>
+            </div>
+          </Panel>
+        </section>
       ) : null}
 
       {activeTab === 'cashier' && canOperateCashier ? (
@@ -3600,6 +3690,7 @@ function PreparationQueuePanel({
   directDispatchSourceKeys,
   items,
   onMoveStatus,
+  operationalFlowSettings,
   title,
 }: {
   areaLabel: string;
@@ -3607,6 +3698,7 @@ function PreparationQueuePanel({
   directDispatchSourceKeys: Set<string>;
   items: PosOrderItem[];
   onMoveStatus: (item: PosOrderItem, nextStatus: 'in_process' | 'ready') => Promise<void>;
+  operationalFlowSettings: PosOperationalFlowSettings;
   title: string;
 }) {
   return (
@@ -3615,6 +3707,7 @@ function PreparationQueuePanel({
         <div className="space-y-3">
           {items.map((item) => {
             const isDirectDispatch = item.menuItemSourceKey ? directDispatchSourceKeys.has(item.menuItemSourceKey) : false;
+            const shouldUseInProcess = shouldUseInProcessStep(item, operationalFlowSettings, isDirectDispatch);
 
             return (
             <article key={item.id} className="rounded-[1.2rem] border border-white/8 bg-white/[0.02] p-4">
@@ -3652,11 +3745,11 @@ function PreparationQueuePanel({
                   {['pending_preparation', 'sent'].includes(item.operationalStatus) ? (
                     <button
                       type="button"
-                      onClick={() => void onMoveStatus(item, isDirectDispatch ? 'ready' : 'in_process')}
+                      onClick={() => void onMoveStatus(item, shouldUseInProcess ? 'in_process' : 'ready')}
                       disabled={Boolean(busyAction)}
-                      className={isDirectDispatch ? primaryButtonClassName : ghostButtonClassName}
+                      className={shouldUseInProcess ? ghostButtonClassName : primaryButtonClassName}
                     >
-                      {isDirectDispatch ? 'Marcar listo' : 'En proceso'}
+                      {shouldUseInProcess ? 'En proceso' : 'Marcar listo'}
                     </button>
                   ) : null}
                   {item.operationalStatus === 'in_process' ? (
@@ -3673,6 +3766,82 @@ function PreparationQueuePanel({
         </div>
       </Panel>
     </section>
+  );
+}
+
+function OperationalFlowSettingsPanel({
+  busyAction,
+  onToggle,
+  savingArea,
+  settings,
+}: {
+  busyAction: string | null;
+  onToggle: (area: PosOrderItem['prepArea'], field: keyof PosOperationalFlowSettings[PosOrderItem['prepArea']], value: boolean) => Promise<void>;
+  savingArea: PosOrderItem['prepArea'] | null;
+  settings: PosOperationalFlowSettings;
+}) {
+  const areas: Array<{ area: PosOrderItem['prepArea']; label: string }> = [
+    { area: 'kitchen', label: 'Cocina' },
+    { area: 'bar', label: 'Bar' },
+  ];
+
+  return (
+    <section>
+      <Panel title="Flujo operativo" subtitle="Activa o salta pasos intermedios por area. Los estados se conservan para trazabilidad.">
+        <div className="grid gap-3 md:grid-cols-2">
+          {areas.map(({ area, label }) => (
+            <article key={area} className="rounded-[1.1rem] border border-white/8 bg-white/[0.02] p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="font-semibold text-ivory">{label}</p>
+                  <p className="mt-1 text-xs uppercase tracking-[0.18em] text-cyanGlow/75">{savingArea === area ? 'Guardando' : 'Configurado'}</p>
+                </div>
+              </div>
+
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <FlowSwitch
+                  checked={settings[area].useInProcess}
+                  disabled={Boolean(busyAction) || savingArea === area}
+                  label="En proceso"
+                  onChange={(value) => void onToggle(area, 'useInProcess', value)}
+                />
+                <FlowSwitch
+                  checked={settings[area].usePickingUp}
+                  disabled={Boolean(busyAction) || savingArea === area}
+                  label="Recogiendo"
+                  onChange={(value) => void onToggle(area, 'usePickingUp', value)}
+                />
+              </div>
+            </article>
+          ))}
+        </div>
+      </Panel>
+    </section>
+  );
+}
+
+function FlowSwitch({
+  checked,
+  disabled,
+  label,
+  onChange,
+}: {
+  checked: boolean;
+  disabled: boolean;
+  label: string;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <label className={`flex items-center justify-between gap-3 rounded-[1rem] border border-white/8 bg-black/15 px-3 py-2.5 ${disabled ? 'opacity-60' : ''}`}>
+      <span className="text-sm font-medium text-ivory">{label}</span>
+      <input
+        type="checkbox"
+        checked={checked}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.checked)}
+        className="h-5 w-10 cursor-pointer accent-cyanGlow disabled:cursor-not-allowed"
+      />
+    </label>
   );
 }
 
@@ -4418,9 +4587,11 @@ function resolvePreparationQueueTimestampForUi(item: PosOrderItem) {
   return item.sentAt ?? item.createdAt;
 }
 
-function sortPreparationQueueForUi(items: PosOrderItem[], directDispatchSourceKeys: Set<string>) {
+function sortPreparationQueueForUi(items: PosOrderItem[], directDispatchSourceKeys: Set<string>, operationalFlowSettings: PosOperationalFlowSettings) {
   return [...items].sort((left, right) => {
-    const priorityDifference = getPreparationQueuePriorityForUi(left, directDispatchSourceKeys) - getPreparationQueuePriorityForUi(right, directDispatchSourceKeys);
+    const priorityDifference =
+      getPreparationQueuePriorityForUi(left, directDispatchSourceKeys, operationalFlowSettings) -
+      getPreparationQueuePriorityForUi(right, directDispatchSourceKeys, operationalFlowSettings);
 
     if (priorityDifference !== 0) {
       return priorityDifference;
@@ -4430,12 +4601,13 @@ function sortPreparationQueueForUi(items: PosOrderItem[], directDispatchSourceKe
   });
 }
 
-function getPreparationQueuePriorityForUi(item: PosOrderItem, directDispatchSourceKeys: Set<string>) {
-  if (item.operationalStatus === 'in_process') {
+function getPreparationQueuePriorityForUi(item: PosOrderItem, directDispatchSourceKeys: Set<string>, operationalFlowSettings: PosOperationalFlowSettings) {
+  const isDirectDispatch = item.menuItemSourceKey ? directDispatchSourceKeys.has(item.menuItemSourceKey) : false;
+  const shouldUseInProcess = shouldUseInProcessStep(item, operationalFlowSettings, isDirectDispatch);
+
+  if (item.operationalStatus === 'in_process' && shouldUseInProcess) {
     return 0;
   }
-
-  const isDirectDispatch = item.menuItemSourceKey ? directDispatchSourceKeys.has(item.menuItemSourceKey) : false;
 
   if (['pending_preparation', 'sent'].includes(item.operationalStatus) && isDirectDispatch) {
     return 1;
@@ -4445,15 +4617,27 @@ function getPreparationQueuePriorityForUi(item: PosOrderItem, directDispatchSour
     return 2;
   }
 
-  if (item.operationalStatus === 'picking_up') {
+  if (item.operationalStatus === 'in_process') {
     return 3;
   }
 
-  if (item.operationalStatus === 'ready') {
+  if (item.operationalStatus === 'picking_up') {
     return 4;
   }
 
-  return 5;
+  if (item.operationalStatus === 'ready') {
+    return 5;
+  }
+
+  return 6;
+}
+
+function shouldUseInProcessStep(item: PosOrderItem, operationalFlowSettings: PosOperationalFlowSettings, isDirectDispatch = false) {
+  return !isDirectDispatch && operationalFlowSettings[item.prepArea].useInProcess;
+}
+
+function shouldUsePickingUpStep(item: PosOrderItem, operationalFlowSettings: PosOperationalFlowSettings) {
+  return operationalFlowSettings[item.prepArea].usePickingUp;
 }
 
 function getPosFallbackSyncInterval(tab: WorkspaceTab) {

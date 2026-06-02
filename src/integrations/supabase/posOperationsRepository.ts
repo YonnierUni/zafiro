@@ -15,6 +15,8 @@ import type {
   PosOrderWithRelations,
   PosPayment,
   PosProductOption,
+  PosOperationalFlowSettings,
+  PosSalesSessionHistoryEntry,
   PosSalesSession,
   PosSalesSessionSummary,
   PosState,
@@ -37,6 +39,22 @@ type PosPaymentRow = Database['public']['Tables']['pos_payments']['Row'];
 type PosSalesSessionRow = Database['public']['Tables']['pos_sales_sessions']['Row'];
 type PosLogRow = Database['public']['Tables']['pos_order_status_logs']['Row'];
 type StaffProfileRow = Database['public']['Tables']['staff_profiles']['Row'];
+type PosOperationalFlowSettingsRow = {
+  area: string;
+  use_in_process: boolean | null;
+  use_picking_up: boolean | null;
+};
+
+export const defaultPosOperationalFlowSettings: PosOperationalFlowSettings = {
+  bar: {
+    useInProcess: false,
+    usePickingUp: false,
+  },
+  kitchen: {
+    useInProcess: false,
+    usePickingUp: false,
+  },
+};
 
 export interface PosActorContext {
   email: string;
@@ -59,6 +77,20 @@ export interface MovePosActiveOrderResult {
   sourceTable: PosTable;
 }
 
+export interface ManualSalesSessionWindowInput {
+  businessDate: string;
+  closedAt: string;
+  notes?: string;
+  openedAt: string;
+  sessionLabel?: string;
+}
+
+export interface UpdatePosOperationalFlowSettingsInput {
+  area: PreparationArea;
+  useInProcess: boolean;
+  usePickingUp: boolean;
+}
+
 const TERMINAL_ITEM_STATUSES = new Set<OrderOperationalStatus>(['delivered', 'cancelled']);
 const DRAFT_EDITABLE_STATUSES = new Set<OrderOperationalStatus>(['draft']);
 const CONTROLLED_CANCEL_STATUSES = new Set<OrderOperationalStatus>(['draft', 'sent', 'pending_preparation']);
@@ -72,7 +104,8 @@ type PosRealtimeTable =
   | 'pos_order_items'
   | 'pos_payments'
   | 'pos_sales_sessions'
-  | 'pos_order_status_logs';
+  | 'pos_order_status_logs'
+  | 'pos_operational_flow_settings';
 
 export interface PosRealtimeEvent {
   eventType: 'INSERT' | 'UPDATE' | 'DELETE';
@@ -83,13 +116,14 @@ export interface PosRealtimeEvent {
 
 export async function loadPosStateFromSupabase(): Promise<PosState> {
   const supabase = getSupabaseClient();
-  const [tables, orders, items, payments, logs, salesSessions] = await Promise.all([
+  const [tables, orders, items, payments, logs, salesSessions, operationalFlowSettings] = await Promise.all([
     supabase.from('pos_tables').select('*').order('code', { ascending: true }),
     supabase.from('pos_orders').select('*').order('opened_at', { ascending: false }),
     supabase.from('pos_order_items').select('*').order('created_at', { ascending: true }),
     supabase.from('pos_payments').select('*').order('created_at', { ascending: true }),
     supabase.from('pos_order_status_logs').select('*').order('created_at', { ascending: false }).limit(120),
     supabase.from('pos_sales_sessions').select('*').order('opened_at', { ascending: false }).limit(10),
+    loadPosOperationalFlowSettingsRows(),
   ]);
 
   throwIfError(tables.error, 'No fue posible leer las mesas POS');
@@ -98,6 +132,7 @@ export async function loadPosStateFromSupabase(): Promise<PosState> {
   throwIfError(payments.error, 'No fue posible leer los pagos POS');
   throwIfError(logs.error, 'No fue posible leer la trazabilidad POS');
   throwIfError(salesSessions.error, 'No fue posible leer las jornadas POS');
+  const mappedOperationalFlowSettings = mapPosOperationalFlowSettingsRows(operationalFlowSettings);
 
   const ordersWithRelations = buildOrdersWithRelations(orders.data ?? [], items.data ?? [], payments.data ?? []);
   const tablesWithOrders = buildTablesWithOrders(tables.data ?? [], ordersWithRelations);
@@ -146,6 +181,7 @@ export async function loadPosStateFromSupabase(): Promise<PosState> {
       .sort((left, right) => (right.closedAt ?? right.updatedAt).localeCompare(left.closedAt ?? left.updatedAt)),
     pendingPreparationKitchen: pendingPreparationItems.filter((item) => item.prepArea === 'kitchen'),
     pendingPreparationBar: pendingPreparationItems.filter((item) => item.prepArea === 'bar'),
+    operationalFlowSettings: mappedOperationalFlowSettings,
     pendingPayments: mappedPayments.filter((payment) => payment.status === 'pending'),
     logs: (logs.data ?? []).map(mapPosLogRow),
   };
@@ -201,6 +237,50 @@ export async function loadPosProductOptionsFromSupabase() {
   throwIfError(error, 'No fue posible cargar el catalogo operativo para POS');
 
   return (data ?? []).map(mapMenuItemPublicRow);
+}
+
+export async function updatePosOperationalFlowSettingsInSupabase(input: UpdatePosOperationalFlowSettingsInput, actor: PosActorContext) {
+  if (!actor.email) {
+    throw new Error('No hay una sesion operativa valida para cambiar la configuracion del POS.');
+  }
+
+  ensureCanManageSalesSessions(actor.roles);
+
+  const supabase = getSupabaseClient();
+  const row = {
+    area: input.area,
+    use_in_process: input.useInProcess,
+    use_picking_up: input.usePickingUp,
+    updated_at: new Date().toISOString(),
+    updated_by_email: actor.email,
+  };
+  const { error } = await supabase.from('pos_operational_flow_settings' as never).upsert(row as never, { onConflict: 'area' } as never);
+  throwIfError(error, 'No fue posible guardar la configuracion operativa.');
+
+  await insertPosLog({
+    actor,
+    afterData: row,
+    eventType: 'pos_operational_flow_settings_updated',
+    notes: `Configuracion operativa actualizada para ${input.area === 'bar' ? 'bar' : 'cocina'}`,
+  });
+
+  return {
+    ...defaultPosOperationalFlowSettings,
+    [input.area]: {
+      useInProcess: input.useInProcess,
+      usePickingUp: input.usePickingUp,
+    },
+  };
+}
+
+async function loadPosOperationalFlowSettingsRows() {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from('pos_operational_flow_settings' as never)
+    .select('area, use_in_process, use_picking_up' as never);
+
+  throwIfError(error, 'No fue posible leer la configuracion operativa POS');
+  return (data ?? []) as unknown as PosOperationalFlowSettingsRow[];
 }
 
 export async function createPosTableInSupabase(input: CreatePosTableInput, actor: PosActorContext) {
@@ -1114,6 +1194,119 @@ export async function closeActiveSalesSessionInSupabase(actor: PosActorContext, 
   return mapPosSalesSessionRow(data);
 }
 
+export async function loadSalesSessionHistoryFromSupabase(): Promise<PosSalesSessionHistoryEntry[]> {
+  const supabase = getSupabaseClient();
+  const [sessions, orders, payments] = await Promise.all([
+    supabase.from('pos_sales_sessions').select('*').order('opened_at', { ascending: false }),
+    supabase.from('pos_orders').select('id,sales_session_id').not('sales_session_id', 'is', null),
+    supabase.from('pos_payments').select('id,sales_session_id,status,amount_applied').not('sales_session_id', 'is', null),
+  ]);
+
+  throwIfError(sessions.error, 'No fue posible leer el historial de jornadas');
+  throwIfError(orders.error, 'No fue posible leer las cuentas asociadas a jornadas');
+  throwIfError(payments.error, 'No fue posible leer los pagos asociados a jornadas');
+
+  const orderCountBySessionId = new Map<string, number>();
+  const paymentStatsBySessionId = new Map<string, { paymentCount: number; totalCollected: number }>();
+
+  for (const order of orders.data ?? []) {
+    if (!order.sales_session_id) {
+      continue;
+    }
+    orderCountBySessionId.set(order.sales_session_id, (orderCountBySessionId.get(order.sales_session_id) ?? 0) + 1);
+  }
+
+  for (const payment of payments.data ?? []) {
+    if (!payment.sales_session_id) {
+      continue;
+    }
+
+    const current = paymentStatsBySessionId.get(payment.sales_session_id) ?? { paymentCount: 0, totalCollected: 0 };
+    paymentStatsBySessionId.set(payment.sales_session_id, {
+      paymentCount: current.paymentCount + 1,
+      totalCollected: current.totalCollected + (payment.status === 'confirmed' ? Number(payment.amount_applied ?? 0) : 0),
+    });
+  }
+
+  return (sessions.data ?? []).map((row) => {
+    const session = mapPosSalesSessionRow(row);
+    const summary = session.summary;
+    const paymentStats = paymentStatsBySessionId.get(session.id);
+
+    return {
+      ...session,
+      orderCount: orderCountBySessionId.get(session.id) ?? summary?.orderCount ?? 0,
+      paymentCount: paymentStats?.paymentCount ?? 0,
+      totalCollected: paymentStats?.totalCollected ?? summary?.totalCollected ?? 0,
+      totalSold: summary?.grossSales ?? 0,
+    };
+  });
+}
+
+export async function deleteSalesSessionFromSupabase(sessionId: string, actor: PosActorContext) {
+  ensureCanManageSalesSessions(actor.roles);
+  const supabase = getSupabaseClient();
+  const session = await getSalesSessionById(sessionId);
+
+  if (session.status === 'open') {
+    throw new Error('No puedes eliminar una jornada abierta. Cierrala primero.');
+  }
+
+  const { error } = await supabase.rpc('delete_pos_sales_session' as never, { sales_session_id: sessionId } as never);
+  throwIfError(error, 'No fue posible eliminar la jornada');
+
+  return session;
+}
+
+export async function reassignOrderSalesSessionInSupabase(orderId: string, destinationSalesSessionId: string, actor: PosActorContext) {
+  ensureCanManageSalesSessions(actor.roles);
+
+  if (!destinationSalesSessionId) {
+    throw new Error('Selecciona la jornada destino antes de mover la cuenta.');
+  }
+
+  const supabase = getSupabaseClient();
+  const { error } = await supabase.rpc('reassign_pos_order_sales_session' as never, {
+    destination_sales_session_id: destinationSalesSessionId,
+    target_order_id: orderId,
+  } as never);
+
+  throwIfError(error, 'No fue posible mover la cuenta a otra jornada');
+}
+
+export async function createManualSalesSessionInSupabase(input: ManualSalesSessionWindowInput, actor: PosActorContext) {
+  ensureCanManageSalesSessions(actor.roles);
+  validateManualSalesSessionWindow(input);
+
+  const supabase = getSupabaseClient();
+  const { error } = await supabase.rpc('create_pos_sales_session_manual' as never, {
+    manual_business_date: input.businessDate,
+    manual_closed_at: input.closedAt,
+    manual_notes: input.notes?.trim() ?? '',
+    manual_opened_at: input.openedAt,
+    manual_session_label: input.sessionLabel?.trim() || null,
+  } as never);
+
+  throwIfError(error, 'No fue posible crear la jornada manual');
+}
+
+export async function updateSalesSessionWindowInSupabase(sessionId: string, input: ManualSalesSessionWindowInput, actor: PosActorContext) {
+  ensureCanManageSalesSessions(actor.roles);
+  validateManualSalesSessionWindow(input);
+
+  const supabase = getSupabaseClient();
+  const { error } = await supabase.rpc('update_pos_sales_session_window' as never, {
+    manual_business_date: input.businessDate,
+    manual_closed_at: input.closedAt,
+    manual_notes: input.notes?.trim() ?? null,
+    manual_opened_at: input.openedAt,
+    manual_session_label: input.sessionLabel?.trim() || null,
+    sales_session_id: sessionId,
+  } as never);
+
+  throwIfError(error, 'No fue posible ajustar la jornada');
+}
+
 export async function updatePosPaymentStatusInSupabase(
   paymentId: string,
   input: UpdatePaymentStatusInput,
@@ -1189,6 +1382,7 @@ export function subscribeToPosRealtime(onChange: () => void, onEvent?: (event: P
     .on('postgres_changes', { event: '*', schema: 'public', table: 'pos_payments' }, buildHandler('pos_payments'))
     .on('postgres_changes', { event: '*', schema: 'public', table: 'pos_sales_sessions' }, buildHandler('pos_sales_sessions'))
     .on('postgres_changes', { event: '*', schema: 'public', table: 'pos_order_status_logs' }, buildHandler('pos_order_status_logs'))
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'pos_operational_flow_settings' }, buildHandler('pos_operational_flow_settings'))
     .subscribe();
 
   return () => {
@@ -1588,6 +1782,28 @@ function ensureCanVoidProcessedItem(roles: StaffRole[]) {
   }
 
   throw new Error('Tu rol actual no puede anular productos por excepcion.');
+}
+
+function ensureCanManageSalesSessions(roles: StaffRole[]) {
+  if (roles.includes('superadmin')) {
+    return;
+  }
+
+  throw new Error('Solo superadmin puede administrar el historial de jornadas.');
+}
+
+function validateManualSalesSessionWindow(input: ManualSalesSessionWindowInput) {
+  if (!input.businessDate) {
+    throw new Error('La jornada debe tener fecha contable.');
+  }
+
+  if (!input.openedAt || !input.closedAt) {
+    throw new Error('La jornada debe tener fecha de apertura y cierre.');
+  }
+
+  if (new Date(input.closedAt).getTime() <= new Date(input.openedAt).getTime()) {
+    throw new Error('La fecha de cierre debe ser posterior a la apertura.');
+  }
 }
 
 function derivePreparationAreaFromProductType(productType: string): PreparationArea {
@@ -2008,6 +2224,28 @@ function mapPosLogRow(row: PosLogRow): PosOrderStatusLog {
     orderItemId: row.order_item_id,
     tableId: row.table_id,
   };
+}
+
+function mapPosOperationalFlowSettingsRows(rows: PosOperationalFlowSettingsRow[]): PosOperationalFlowSettings {
+  return rows.reduce<PosOperationalFlowSettings>(
+    (settings, row) => {
+      if (row.area !== 'bar' && row.area !== 'kitchen') {
+        return settings;
+      }
+
+      return {
+        ...settings,
+        [row.area]: {
+          useInProcess: Boolean(row.use_in_process),
+          usePickingUp: Boolean(row.use_picking_up),
+        },
+      };
+    },
+    {
+      bar: { ...defaultPosOperationalFlowSettings.bar },
+      kitchen: { ...defaultPosOperationalFlowSettings.kitchen },
+    },
+  );
 }
 
 function normalizeMoney(value: number | undefined) {

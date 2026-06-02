@@ -4,6 +4,7 @@ import { RequireCatalogAdminAuth } from '../auth/RequireCatalogAdminAuth';
 import { AdminLoginView } from '../admin/AdminLoginView';
 import { AdminMenuView } from '../admin/AdminMenuView';
 import { AdminPosView } from '../admin/AdminPosView';
+import { AdminSalesSessionsView } from '../admin/AdminSalesSessionsView';
 import { AdminView } from '../admin/AdminView';
 import { HomeView } from '../views/HomeView';
 import { MenuView } from '../views/MenuView';
@@ -15,6 +16,7 @@ export function AppRouter() {
       <Route element={<RequireAdminAuth />}>
         <Route path="/admin" element={<AdminView />} />
         <Route path="/admin/pos" element={<AdminPosView />} />
+        <Route path="/admin/sales-sessions" element={<AdminSalesSessionsView />} />
       </Route>
       <Route element={<RequireCatalogAdminAuth />}>
         <Route path="/admin/menu" element={<AdminMenuView />} />

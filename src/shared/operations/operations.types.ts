@@ -177,6 +177,13 @@ export interface PosSalesSession {
   updatedAt: string;
 }
 
+export interface PosSalesSessionHistoryEntry extends PosSalesSession {
+  orderCount: number;
+  paymentCount: number;
+  totalCollected: number;
+  totalSold: number;
+}
+
 export interface PosOrderStatusLog {
   id: string;
   orderId?: string | null;
@@ -190,6 +197,13 @@ export interface PosOrderStatusLog {
   afterData?: Record<string, unknown> | null;
   notes?: string | null;
 }
+
+export interface PosOperationalFlowAreaSettings {
+  useInProcess: boolean;
+  usePickingUp: boolean;
+}
+
+export type PosOperationalFlowSettings = Record<PreparationArea, PosOperationalFlowAreaSettings>;
 
 export interface PosOrderWithRelations extends PosOrder {
   items: PosOrderItem[];
@@ -212,6 +226,7 @@ export interface PosState {
   closedSales: PosOrderWithRelations[];
   pendingPreparationKitchen: PosOrderItem[];
   pendingPreparationBar: PosOrderItem[];
+  operationalFlowSettings: PosOperationalFlowSettings;
   pendingPayments: PosPayment[];
   logs: PosOrderStatusLog[];
 }

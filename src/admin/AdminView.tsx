@@ -3,7 +3,7 @@ import { AdminLayout } from './AdminLayout';
 import { useSupabaseAuth } from '../auth/SupabaseAuthProvider';
 
 export function AdminView() {
-  const { canAccessCatalog, canAccessPos, staffProfile } = useSupabaseAuth();
+  const { canAccessCatalog, canAccessPos, isCatalogAdmin, staffProfile } = useSupabaseAuth();
 
   if (canAccessPos && !canAccessCatalog) {
     return <Navigate to="/admin/pos" replace />;
@@ -32,12 +32,21 @@ export function AdminView() {
           tone: 'pos',
         }
       : null,
+    isCatalogAdmin
+      ? {
+          cta: 'Ver jornadas',
+          description: 'Historial completo de jornadas POS, resumen de ventas y eliminacion controlada de jornadas de prueba.',
+          title: 'Jornadas POS',
+          to: '/admin/sales-sessions',
+          tone: 'sessions',
+        }
+      : null,
   ].filter(Boolean) as Array<{
     cta: string;
     description: string;
     title: string;
     to: string;
-    tone: 'catalog' | 'pos';
+    tone: 'catalog' | 'pos' | 'sessions';
   }>;
 
   return (
@@ -58,6 +67,8 @@ export function AdminView() {
             className={`interactive-card rounded-[1.9rem] border border-white/10 p-6 shadow-[0_18px_40px_rgba(0,0,0,0.24)] transition hover:border-cyanGlow/30 ${
               module.tone === 'catalog'
                 ? 'bg-[linear-gradient(135deg,rgba(36,107,255,0.12),rgba(255,255,255,0.03))]'
+                : module.tone === 'sessions'
+                  ? 'bg-[linear-gradient(135deg,rgba(245,158,11,0.12),rgba(255,255,255,0.03))]'
                 : 'bg-[linear-gradient(135deg,rgba(9,28,58,0.92),rgba(36,107,255,0.12))]'
             }`}
           >

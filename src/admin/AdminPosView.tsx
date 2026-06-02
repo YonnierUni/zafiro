@@ -752,6 +752,17 @@ export function AdminPosView() {
   const selectedHistoricalSession = selectedHistoricalSessionId
     ? previousClosedSessions.find((session) => session.id === selectedHistoricalSessionId) ?? null
     : null;
+  const selectedHistoricalSessionCashTotal = useMemo(
+    () => selectedHistoricalSession?.summary?.paymentMethods.find((entry) => entry.method === 'cash')?.totalAmount ?? 0,
+    [selectedHistoricalSession?.summary?.paymentMethods],
+  );
+  const selectedHistoricalSessionNonCashTotal = useMemo(
+    () =>
+      selectedHistoricalSession?.summary?.paymentMethods
+        .filter((entry) => entry.method !== 'cash')
+        .reduce((sum, entry) => sum + entry.totalAmount, 0) ?? 0,
+    [selectedHistoricalSession?.summary?.paymentMethods],
+  );
   const selectedHistoricalSessionSales = useMemo(
     () =>
       selectedHistoricalSession
@@ -3006,6 +3017,8 @@ export function AdminPosView() {
                             <SummaryPill label="Fecha contable" value={selectedHistoricalSession.businessDate} />
                             <SummaryPill label="Vendido" value={formatCurrency(selectedHistoricalSession.summary?.grossSales ?? 0)} />
                             <SummaryPill label="Cobrado" value={formatCurrency(selectedHistoricalSession.summary?.totalCollected ?? 0)} />
+                            <SummaryPill label="Efectivo" value={formatCurrency(selectedHistoricalSessionCashTotal)} />
+                            <SummaryPill label="Transferencias" value={formatCurrency(selectedHistoricalSessionNonCashTotal)} />
                             <SummaryPill label="Pendiente" value={formatCurrency(selectedHistoricalSession.summary?.pendingBalance ?? 0)} />
                             <SummaryPill label="Mesas cerradas" value={String(selectedHistoricalSessionSales.length)} />
                           </div>

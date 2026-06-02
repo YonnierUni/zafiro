@@ -915,9 +915,7 @@ export async function transitionPreparationItemInSupabase(
   const isDirectDispatch = await isRegisteredBeverageItem(item);
   const allowedCurrent = nextStatus === 'in_process'
     ? ['pending_preparation', 'sent']
-    : isDirectDispatch
-      ? ['pending_preparation', 'sent', 'in_process']
-      : ['in_process'];
+    : ['pending_preparation', 'sent', 'in_process'];
   if (!allowedCurrent.includes(item.operationalStatus)) {
     throw new Error('La linea no esta en un estado valido para ese movimiento operativo.');
   }
@@ -1806,7 +1804,7 @@ function validateManualSalesSessionWindow(input: ManualSalesSessionWindowInput) 
   }
 }
 
-function derivePreparationAreaFromProductType(productType: string): PreparationArea {
+export function derivePreparationAreaFromProductType(productType: string): PreparationArea {
   const normalized = productType.trim().toLowerCase();
   if (BAR_PRODUCT_TYPES.has(normalized)) {
     return 'bar';

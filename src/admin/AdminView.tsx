@@ -34,6 +34,15 @@ export function AdminView() {
       : null,
     isCatalogAdmin
       ? {
+          cta: 'Abrir ajustes POS',
+          description: 'Configura el flujo operativo del POS para cocina y bar, solo visible para superadmin.',
+          title: 'Ajustes POS',
+          to: '/admin/pos-settings',
+          tone: 'pos',
+        }
+      : null,
+    isCatalogAdmin
+      ? {
           cta: 'Ver jornadas',
           description: 'Historial completo de jornadas POS, resumen de ventas y eliminacion controlada de jornadas de prueba.',
           title: 'Jornadas POS',

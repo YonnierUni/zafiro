@@ -4749,9 +4749,9 @@ function sanitizePercentageInput(value: string) {
 }
 
 const inputClassName =
-  'w-full rounded-[1rem] border border-white/10 bg-obsidian/50 px-4 py-3 text-sm text-ivory outline-none transition focus:border-cyanGlow/40';
+  'w-full rounded-[1rem] border border-white/10 bg-obsidian/50 px-4 py-3 text-base text-ivory outline-none transition focus:border-cyanGlow/40';
 const invalidInputClassName =
-  'w-full rounded-[1rem] border border-rose-300/45 bg-obsidian/50 px-4 py-3 text-sm text-ivory outline-none transition focus:border-rose-300/65';
+  'w-full rounded-[1rem] border border-rose-300/45 bg-obsidian/50 px-4 py-3 text-base text-ivory outline-none transition focus:border-rose-300/65';
 const primaryButtonClassName =
   'rounded-full border border-cyanGlow/28 bg-cyanGlow/12 px-4 py-2.5 text-xs font-semibold uppercase tracking-[0.22em] text-cyanGlow transition hover:border-cyanGlow/42 hover:bg-cyanGlow/18 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyanGlow/24 disabled:cursor-not-allowed disabled:opacity-60';
 const ghostButtonClassName =

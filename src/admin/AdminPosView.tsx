@@ -45,10 +45,11 @@ import {
   updatePosPaymentStatusInSupabase,
   updatePosOperationalFlowSettingsInSupabase,
   voidProcessedOrderItemInSupabase,
+  derivePreparationAreaFromProductType,
   type PosRealtimeEvent,
 } from '../integrations/supabase/posOperationsRepository';
 
-type WorkspaceTab = 'floor' | 'kitchen' | 'bar' | 'cashier' | 'settings';
+type WorkspaceTab = 'floor' | 'kitchen' | 'bar' | 'cashier';
 type CashierRightPanel = 'summary' | 'previous_sessions' | 'validations' | 'movements';
 type AddItemMode = 'menu' | 'extra';
 
@@ -65,7 +66,6 @@ const workspaceLabels: Record<WorkspaceTab, string> = {
   kitchen: 'Cocina',
   bar: 'Bar',
   cashier: 'Caja',
-  settings: 'Ajustes',
 };
 
 const tableStatusLabels: Record<PosTableWithOrder['status'], string> = {
@@ -126,7 +126,6 @@ export function AdminPosView() {
   const canOperateKitchen = actor.roles.includes('superadmin') || hasRole('kitchen');
   const canOperateBar = actor.roles.includes('superadmin') || hasRole('bar');
   const canOperateCashier = actor.roles.includes('superadmin') || hasRole('cashier');
-  const canManagePosSettings = actor.roles.includes('superadmin');
   const shouldShowTableSummary = actor.roles.includes('superadmin') || canOperateCashier;
   const shouldShowFloorSidebar = actor.roles.includes('superadmin') || canOperateCashier;
   const showFinancialBadgeInProducts = actor.roles.includes('superadmin') || canOperateCashier;
@@ -141,12 +140,11 @@ export function AdminPosView() {
         canOperateKitchen ? 'kitchen' : null,
         canOperateBar ? 'bar' : null,
         canOperateCashier ? 'cashier' : null,
-        canManagePosSettings ? 'settings' : null,
       ].filter((tab): tab is WorkspaceTab => tab != null),
-    [canManagePosSettings, canOperateBar, canOperateCashier, canOperateFloor, canOperateKitchen],
+    [canOperateBar, canOperateCashier, canOperateFloor, canOperateKitchen],
   );
 
-  const [activeTab, setActiveTab] = useState<WorkspaceTab>('floor');
+  const [activeTab, setActiveTab] = useState<WorkspaceTab>(() => workspaceTabs[0] ?? 'floor');
   const [posState, setPosState] = useState<PosState | null>(null);
   const [products, setProducts] = useState<PosProductOption[]>([]);
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
@@ -185,8 +183,10 @@ export function AdminPosView() {
   const [highlightedPendingPaymentId, setHighlightedPendingPaymentId] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [floatingActionToast, setFloatingActionToast] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [busyAction, setBusyAction] = useState<string | null>(null);
+  const currentBusyActionIdRef = useRef(0);
   const [savingOperationalFlowArea, setSavingOperationalFlowArea] = useState<PosOrderItem['prepArea'] | null>(null);
   const [highlightedOrderItemId, setHighlightedOrderItemId] = useState<string | null>(null);
   const realtimeTimerRef = useRef<number | null>(null);
@@ -555,10 +555,10 @@ export function AdminPosView() {
   const isCustomItemUnitPriceValid = parsedCustomItemUnitPrice != null && parsedCustomItemUnitPrice > 0;
   const canSubmitLineItem =
     replaceTargetItemId
-      ? Boolean(selectedProduct && isLineQuantityValid && !busyAction)
+      ? Boolean(selectedProduct && isLineQuantityValid)
       : addItemMode === 'extra'
-      ? Boolean(selectedTable && customItemNameValue && isLineQuantityValid && isCustomItemUnitPriceValid && !replaceTargetItemId && !busyAction)
-      : Boolean(selectedProduct && isLineQuantityValid && !busyAction);
+      ? Boolean(selectedTable && customItemNameValue && isLineQuantityValid && isCustomItemUnitPriceValid && !replaceTargetItemId)
+      : Boolean(selectedProduct && isLineQuantityValid);
   const parsedEditingQuantity = parseOptionalNumber(editingQuantity);
   const isEditingQuantityValid = parsedEditingQuantity != null && parsedEditingQuantity > 0;
   const parsedCapacity = createTableForm.capacity ?? null;
@@ -941,20 +941,26 @@ export function AdminPosView() {
     pendingOrderItemFocusRef.current = null;
     setHighlightedOrderItemId(itemId);
 
-    const focusAndReveal = window.requestAnimationFrame(() => {
-      itemCard.focus({ preventScroll: true });
-      itemCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    });
     const clearHighlight = window.setTimeout(() => {
       setHighlightedOrderItemId((current) => (current === itemId ? null : current));
     }, 2200);
 
     return () => {
-      window.cancelAnimationFrame(focusAndReveal);
       window.clearTimeout(clearHighlight);
     };
   }, [activeTab, selectedOrderVisibleItems]);
 
+  useEffect(() => {
+    if (!floatingActionToast) {
+      return undefined;
+    }
+
+    const timer = window.setTimeout(() => {
+      setFloatingActionToast(null);
+    }, 2200);
+
+    return () => window.clearTimeout(timer);
+  }, [floatingActionToast]);
   useEffect(() => {
     if (!shouldFocusReplacementFormRef.current || !replaceTargetItemId || activeTab !== 'floor') {
       return;
@@ -1054,7 +1060,10 @@ export function AdminPosView() {
     label: string,
     action: () => Promise<T>,
     options?: {
+      skipBusy?: boolean;
+      showToast?: boolean;
       onSuccess?: (result: T) => void;
+      onError?: (error: Error) => string | void;
     },
   ) => {
     if (!actor.email) {
@@ -1062,7 +1071,12 @@ export function AdminPosView() {
       return;
     }
 
-    setBusyAction(label);
+    const actionId = currentBusyActionIdRef.current + 1;
+    if (!options?.skipBusy) {
+      currentBusyActionIdRef.current = actionId;
+      setBusyAction(label);
+    }
+
     setErrorMessage(null);
     setActionMessage(null);
 
@@ -1070,11 +1084,19 @@ export function AdminPosView() {
       const result = await action();
       options?.onSuccess?.(result);
       setActionMessage(label);
+      if (options?.showToast) {
+        setFloatingActionToast(label);
+      }
       markLocalMutationCommitted();
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : `No fue posible completar: ${label}`);
+      const normalizedError = error instanceof Error ? error : new Error(`No fue posible completar: ${label}`);
+      const customMessage = options?.onError?.(normalizedError);
+      setActionMessage(null);
+      setErrorMessage(customMessage ?? normalizedError.message);
     } finally {
-      setBusyAction(null);
+      if (!options?.skipBusy && currentBusyActionIdRef.current === actionId) {
+        setBusyAction(null);
+      }
     }
   };
 
@@ -1254,27 +1276,36 @@ export function AdminPosView() {
         return;
       }
 
-      await executeAction(`Extra agregado a ${selectedTable.code}`, async () =>
-        addCustomItemToTableInSupabase(
-          selectedTable.id,
-          {
-            notes: lineNotes,
-            prepArea: customItemPrepArea,
-            productName: customItemNameValue,
-            quantity: parsedLineQuantity,
-            unitPrice: parsedCustomItemUnitPrice,
+      await executeAction(
+        `Extra agregado a ${selectedTable.code}`,
+        async () =>
+          addCustomItemToTableInSupabase(
+            selectedTable.id,
+            {
+              notes: lineNotes,
+              prepArea: customItemPrepArea,
+              productName: customItemNameValue,
+              quantity: parsedLineQuantity,
+              unitPrice: parsedCustomItemUnitPrice,
+            },
+            actor,
+          ),
+        {
+          skipBusy: true,
+          showToast: true,
+          onSuccess: (createdItem) => {
+            pendingOrderItemFocusRef.current = createdItem.id;
+            setPosState((current) =>
+              current ? mergeAddedItemsIntoPosState(current, selectedTable, [createdItem], actor.email) : current,
+            );
+            setCustomItemName('');
+            setCustomItemUnitPrice('');
+            setLineNotes('');
+            setLineQuantity('1');
           },
-          actor,
-        ), {
-        onSuccess: (createdItem) => {
-          pendingOrderItemFocusRef.current = createdItem.id;
-          setPosState((current) => (current ? mergeAddedItemsIntoPosState(current, selectedTable, [createdItem], actor.email) : current));
-          setCustomItemName('');
-          setCustomItemUnitPrice('');
-          setLineNotes('');
-          setLineQuantity('1');
+          onError: (error) => `No se pudo agregar el extra al borrador: ${error.message}`,
         },
-      });
+      );
       return;
     }
 
@@ -1305,6 +1336,7 @@ export function AdminPosView() {
             targetItem,
           ),
         {
+          skipBusy: true,
           onSuccess: (replacementItem) => {
             pendingOrderItemFocusRef.current = replacementItem.id;
             const now = new Date().toISOString();
@@ -1330,19 +1362,31 @@ export function AdminPosView() {
             setLineNotes('');
             setLineQuantity('1');
           },
+          onError: (error) => `No se pudo reemplazar el producto: ${error.message}`,
         },
       );
       return;
     }
 
-    await executeAction(`Producto agregado a ${selectedTable.code}`, async () => addItemsToTableInSupabase(selectedTable.id, [payload], actor), {
-      onSuccess: (createdItems) => {
-        pendingOrderItemFocusRef.current = createdItems[0]?.id ?? null;
-        setPosState((current) => (current ? mergeAddedItemsIntoPosState(current, selectedTable, createdItems, actor.email) : current));
-        setLineNotes('');
-        setLineQuantity('1');
+    await executeAction(
+      `Producto agregado a ${selectedTable.code}`,
+      async () => addItemsToTableInSupabase(selectedTable.id, [payload], actor),
+      {
+        skipBusy: true,
+        showToast: true,
+        onSuccess: (createdItems) => {
+          pendingOrderItemFocusRef.current = createdItems[0]?.id ?? null;
+          setPosState((current) =>
+            current
+              ? mergeAddedItemsIntoPosState(current, selectedTable, createdItems, actor.email)
+              : current,
+          );
+          setLineNotes('');
+          setLineQuantity('1');
+        },
+        onError: (error) => `No se pudo agregar el producto al borrador: ${error.message}`,
       },
-    });
+    );
   };
 
   const handleStartEditing = (item: PosOrderItem) => {
@@ -1974,6 +2018,12 @@ export function AdminPosView() {
           {actionMessage}
         </section>
       ) : null}
+      {floatingActionToast ? (
+        <div className="pointer-events-none fixed inset-x-2 top-4 z-[9999] flex items-center gap-2 rounded-[1.2rem] border border-emerald-300/40 bg-emerald-500/20 px-4 py-3 text-sm text-emerald-100 backdrop-blur-sm shadow-lg sm:top-auto sm:bottom-6 sm:right-6 sm:inset-x-auto sm:w-fit sm:border-emerald-300/50 sm:bg-emerald-500/25">
+          <span className="text-xl">✓</span>
+          <span className="font-medium">{floatingActionToast}</span>
+        </div>
+      ) : null}
 
       {activeTab === 'floor' && canOperateFloor ? (
         <section className="mt-8 grid gap-6 xl:grid-cols-[minmax(18rem,0.95fr)_minmax(0,1.35fr)_minmax(21rem,0.95fr)]">
@@ -2576,22 +2626,6 @@ export function AdminPosView() {
         />
       ) : null}
 
-      {activeTab === 'settings' && canManagePosSettings ? (
-        <section className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,0.34fr)]">
-          <OperationalFlowSettingsPanel
-            busyAction={busyAction}
-            onToggle={handleToggleOperationalFlowSetting}
-            savingArea={savingOperationalFlowArea}
-            settings={operationalFlowSettings}
-          />
-          <Panel title="Alcance" subtitle="Estos ajustes cambian como avanza la operacion, no los productos ni las cuentas ya cobradas.">
-            <div className="space-y-3 text-sm leading-6 text-mist">
-              <p>Cuando un paso esta apagado, los botones saltan al siguiente estado operativo.</p>
-              <p>Los productos que ya esten en un estado intermedio se pueden terminar normalmente.</p>
-            </div>
-          </Panel>
-        </section>
-      ) : null}
 
       {activeTab === 'cashier' && canOperateCashier ? (
         <section className="mt-8 grid gap-6 xl:grid-cols-[minmax(18rem,0.82fr)_minmax(0,1.15fr)_minmax(0,0.95fr)]">

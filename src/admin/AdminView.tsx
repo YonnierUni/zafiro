@@ -34,20 +34,20 @@ export function AdminView() {
       : null,
     isCatalogAdmin
       ? {
+          cta: 'Ver jornadas',
+          description: 'Historial completo de jornadas POS, resumen de ventas y anulaciones administrativas.',
+          title: 'Jornadas POS',
+          to: '/admin/sales-sessions',
+          tone: 'sessions',
+        }
+      : null,
+    isCatalogAdmin
+      ? {
           cta: 'Abrir ajustes POS',
           description: 'Configura el flujo operativo del POS para cocina y bar, solo visible para superadmin.',
           title: 'Ajustes POS',
           to: '/admin/pos-settings',
           tone: 'pos',
-        }
-      : null,
-    isCatalogAdmin
-      ? {
-          cta: 'Ver jornadas',
-          description: 'Historial completo de jornadas POS, resumen de ventas y eliminacion controlada de jornadas de prueba.',
-          title: 'Jornadas POS',
-          to: '/admin/sales-sessions',
-          tone: 'sessions',
         }
       : null,
   ].filter(Boolean) as Array<{
@@ -68,34 +68,43 @@ export function AdminView() {
         </p>
       </section>
 
-      <section className="mt-10 grid gap-5 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,1.05fr)_minmax(18rem,0.8fr)]">
+      <section className="mt-10 grid auto-rows-fr gap-4 md:grid-cols-2 xl:grid-cols-4">
         {availableModules.map((module) => (
           <Link
             key={module.to}
             to={module.to}
-            className={`interactive-card rounded-[1.9rem] border border-white/10 p-6 shadow-[0_18px_40px_rgba(0,0,0,0.24)] transition hover:border-cyanGlow/30 ${
+            className={`interactive-card group flex min-h-[13.5rem] flex-col justify-between rounded-[1.25rem] border p-5 shadow-[0_16px_34px_rgba(0,0,0,0.2)] transition hover:border-cyanGlow/30 sm:p-6 ${
               module.tone === 'catalog'
-                ? 'bg-[linear-gradient(135deg,rgba(36,107,255,0.12),rgba(255,255,255,0.03))]'
+                ? 'border-cyanGlow/16 bg-[linear-gradient(135deg,rgba(36,107,255,0.12),rgba(255,255,255,0.035))]'
                 : module.tone === 'sessions'
-                  ? 'bg-[linear-gradient(135deg,rgba(245,158,11,0.12),rgba(255,255,255,0.03))]'
-                : 'bg-[linear-gradient(135deg,rgba(9,28,58,0.92),rgba(36,107,255,0.12))]'
+                  ? 'border-amberGlow/20 bg-[linear-gradient(135deg,rgba(245,158,11,0.11),rgba(255,255,255,0.035))]'
+                : 'border-sapphire/28 bg-[linear-gradient(135deg,rgba(9,28,58,0.78),rgba(36,107,255,0.1))]'
             }`}
           >
-            <p className="text-[0.68rem] uppercase tracking-[0.26em] text-cyanGlow/80">Modulo habilitado</p>
-            <h2 className="mt-3 font-display text-[2rem] text-ivory sm:text-[2.4rem]">{module.title}</h2>
-            <p className="mt-3 max-w-xl text-sm leading-7 text-mist sm:text-base">{module.description}</p>
-            <span className="interactive-link mt-5 inline-flex text-xs font-semibold uppercase tracking-[0.24em] text-cyanGlow/85">
+            <div>
+              <div className="flex items-center justify-between gap-3">
+                <p className={`text-[0.62rem] uppercase tracking-[0.22em] ${module.tone === 'sessions' ? 'text-amberGlow' : 'text-cyanGlow/80'}`}>
+                  Modulo habilitado
+                </p>
+                <span className={`h-2.5 w-2.5 rounded-full ${module.tone === 'sessions' ? 'bg-amberGlow' : 'bg-cyanGlow'}`} />
+              </div>
+              <h2 className="mt-5 font-display text-[1.75rem] leading-none text-ivory sm:text-[2rem]">{module.title}</h2>
+              <p className="mt-4 text-sm leading-6 text-mist">{module.description}</p>
+            </div>
+            <span className={`mt-6 inline-flex text-[0.68rem] font-semibold uppercase tracking-[0.2em] ${module.tone === 'sessions' ? 'text-amberGlow' : 'text-cyanGlow/85'}`}>
               {module.cta}
             </span>
           </Link>
         ))}
 
-        <article className="rounded-[1.9rem] border border-white/10 bg-white/[0.03] p-6">
-          <p className="text-[0.68rem] uppercase tracking-[0.26em] text-amberGlow">Tu acceso</p>
-          <div className="mt-4 inline-flex rounded-full border border-emerald-300/25 bg-emerald-300/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-emerald-200">
-            {availableModules.length} modulo(s)
+        <article className="flex min-h-[13.5rem] flex-col justify-between rounded-[1.25rem] border border-white/10 bg-white/[0.035] p-5 sm:p-6">
+          <div>
+            <p className="text-[0.62rem] uppercase tracking-[0.22em] text-amberGlow">Tu acceso</p>
+            <div className="mt-5 inline-flex rounded-full border border-emerald-300/25 bg-emerald-300/10 px-3 py-1.5 text-[0.68rem] font-semibold uppercase tracking-[0.2em] text-emerald-200">
+              {availableModules.length} modulo(s)
+            </div>
           </div>
-          <p className="mt-5 text-sm leading-7 text-mist">
+          <p className="mt-5 text-sm leading-6 text-mist">
             {staffProfile
               ? `${staffProfile.fullName} solo vera lo que su sesion tiene habilitado. Si una cuenta no tiene menu, no se muestra menu. Si no tiene POS, no entra a POS.`
               : 'El backoffice ya puede filtrar vistas por permisos reales sin afectar la web publica.'}

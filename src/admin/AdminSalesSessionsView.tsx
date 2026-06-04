@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { AdminLayout } from './AdminLayout';
 import { useSupabaseAuth } from '../auth/SupabaseAuthProvider';
 import {
+  cancelClosedPaidOrderInSupabase,
   createManualSalesSessionInSupabase,
   deleteSalesSessionFromSupabase,
   loadPosStateFromSupabase,
@@ -233,6 +234,38 @@ export function AdminSalesSessionsView() {
       const message = error instanceof Error ? error.message : 'No fue posible mover la cuenta a otra jornada.';
       setMoveErrorMessage(message);
       setErrorMessage(message);
+    } finally {
+      setBusyOrderId(null);
+    }
+  };
+
+  const handleCancelClosedPaidOrder = async (session: PosSalesSessionHistoryEntry, order: PosOrderWithRelations) => {
+    const tableLabel = resolveOrderTableLabel(order, tablesById);
+    const reason = window.prompt(
+      `Motivo para anular la venta cerrada de ${tableLabel}:`,
+      'Venta registrada por error',
+    );
+    if (!reason) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Esto anulara ${tableLabel} por ${formatCurrency(order.summary.totalDue)} dentro de ${session.sessionLabel}. La venta saldra de vendido/cobrado y quedara trazabilidad. ¿Continuar?`,
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setBusyOrderId(order.id);
+    setErrorMessage(null);
+    setActionMessage(null);
+
+    try {
+      await cancelClosedPaidOrderInSupabase(order.id, reason, actor, order);
+      setActionMessage(`Venta anulada: ${tableLabel}.`);
+      await loadSessions();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'No fue posible anular la venta cerrada.');
     } finally {
       setBusyOrderId(null);
     }
@@ -667,6 +700,20 @@ export function AdminSalesSessionsView() {
                                   className={ghostButtonClassName}
                                 >
                                   Mover de jornada
+                                </button>
+                              </div>
+
+                              <div className="flex flex-wrap items-center justify-between gap-3 rounded-[1rem] border border-rose-300/18 bg-rose-300/8 px-3 py-3">
+                                <p className="text-sm leading-6 text-rose-100/85">
+                                  Anula esta venta solo si fue registrada por error. La accion queda en trazabilidad y ajusta vendido/cobrado.
+                                </p>
+                                <button
+                                  type="button"
+                                  onClick={() => void handleCancelClosedPaidOrder(session, order)}
+                                  disabled={busyOrderId === order.id}
+                                  className={dangerButtonClassName}
+                                >
+                                  {busyOrderId === order.id ? 'Anulando...' : 'Anular venta'}
                                 </button>
                               </div>
 

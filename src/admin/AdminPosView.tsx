@@ -1,4 +1,4 @@
-﻿import type { ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { AdminLayout } from './AdminLayout';
 import { useSupabaseAuth } from '../auth/SupabaseAuthProvider';
@@ -179,6 +179,7 @@ export function AdminPosView() {
   const [salesSessionOpeningNotes, setSalesSessionOpeningNotes] = useState('');
   const [selectedPaymentItemIds, setSelectedPaymentItemIds] = useState<string[]>([]);
   const [cashierRightPanel, setCashierRightPanel] = useState<CashierRightPanel>('summary');
+  const [selectedDetachedCashierOrderId, setSelectedDetachedCashierOrderId] = useState<string | null>(null);
   const [selectedHistoricalSessionId, setSelectedHistoricalSessionId] = useState<string | null>(null);
   const [highlightedPendingPaymentId, setHighlightedPendingPaymentId] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
@@ -571,9 +572,22 @@ export function AdminPosView() {
       ),
     [posState?.tables],
   );
+  const activeTableOrderIds = useMemo(
+    () => new Set((posState?.tables ?? []).flatMap((table) => (table.activeOrder ? [table.activeOrder.id] : []))),
+    [posState?.tables],
+  );
+  const detachedCashierOrders = useMemo(
+    () =>
+      (posState?.openOrders ?? []).filter(
+        (order) =>
+          !activeTableOrderIds.has(order.id) &&
+          (order.summary.remainingBalance > 0 || order.summary.pendingPayments > 0),
+      ),
+    [activeTableOrderIds, posState?.openOrders],
+  );
   const selectedCashierTable = useMemo(
-    () => cashierTables.find((table) => table.id === selectedTableId) ?? cashierTables[0] ?? null,
-    [cashierTables, selectedTableId],
+    () => (selectedDetachedCashierOrderId ? null : cashierTables.find((table) => table.id === selectedTableId) ?? cashierTables[0] ?? null),
+    [cashierTables, selectedDetachedCashierOrderId, selectedTableId],
   );
   const floorTables = useMemo(() => {
     const tables = posState?.tables ?? [];
@@ -604,7 +618,20 @@ export function AdminPosView() {
       ),
     [posState?.tables, selectedTable?.id],
   );
-  const selectedCashierOrder = selectedCashierTable?.activeOrder ?? null;
+  const selectedDetachedCashierOrder = useMemo(
+    () => (selectedDetachedCashierOrderId ? detachedCashierOrders.find((order) => order.id === selectedDetachedCashierOrderId) ?? null : null),
+    [detachedCashierOrders, selectedDetachedCashierOrderId],
+  );
+  const selectedCashierOrder = selectedDetachedCashierOrder ?? selectedCashierTable?.activeOrder ?? null;
+  const selectedCashierOrderTable = useMemo(
+    () => (selectedCashierOrder ? (posState?.tables ?? []).find((table) => table.id === selectedCashierOrder.tableId) ?? null : null),
+    [posState?.tables, selectedCashierOrder],
+  );
+  const selectedCashierTitle = selectedCashierOrder
+    ? selectedDetachedCashierOrder
+      ? `Cobro pendiente de ${selectedCashierOrderTable?.name ?? 'mesa sin vinculo'} · ${selectedCashierOrderTable?.code ?? 'sin codigo'}`
+      : `Cobro de ${selectedCashierTable?.name ?? selectedCashierOrderTable?.name ?? 'mesa'} · ${selectedCashierTable?.code ?? selectedCashierOrderTable?.code ?? 'sin codigo'}`
+    : 'Cobro de mesa';
   const outstandingByItem = useMemo(() => buildOutstandingByItem(selectedCashierOrder), [selectedCashierOrder]);
   const selectablePaymentUnits = useMemo(
     () => buildSelectablePaymentUnits(selectedCashierOrder, outstandingByItem),
@@ -1012,6 +1039,16 @@ export function AdminPosView() {
       setSelectedTableId(cashierTables[0].id);
     }
   }, [activeTab, cashierTables, selectedTableId]);
+
+  useEffect(() => {
+    if (!selectedDetachedCashierOrderId) {
+      return;
+    }
+
+    if (!detachedCashierOrders.some((order) => order.id === selectedDetachedCashierOrderId)) {
+      setSelectedDetachedCashierOrderId(null);
+    }
+  }, [detachedCashierOrders, selectedDetachedCashierOrderId]);
 
   useEffect(() => {
     setSelectedPaymentItemIds((current) => current.filter((entry) => selectablePaymentUnits.some((unit) => unit.unitKey === entry)));
@@ -2020,7 +2057,7 @@ export function AdminPosView() {
       ) : null}
       {floatingActionToast ? (
         <div className="pointer-events-none fixed inset-x-2 top-4 z-[9999] flex items-center gap-2 rounded-[1.2rem] border border-emerald-300/40 bg-emerald-500/20 px-4 py-3 text-sm text-emerald-100 backdrop-blur-sm shadow-lg sm:top-auto sm:bottom-6 sm:right-6 sm:inset-x-auto sm:w-fit sm:border-emerald-300/50 sm:bg-emerald-500/25">
-          <span className="text-xl">✓</span>
+          <span className="text-xl">?</span>
           <span className="font-medium">{floatingActionToast}</span>
         </div>
       ) : null}
@@ -2638,6 +2675,7 @@ export function AdminPosView() {
                     type="button"
                     onClick={() => {
                       shouldFocusCashierPaymentPanelRef.current = true;
+                      setSelectedDetachedCashierOrderId(null);
                       setSelectedTableId(table.id);
                     }}
                     className={`w-full rounded-[1.2rem] border p-4 text-left transition ${
@@ -2661,18 +2699,61 @@ export function AdminPosView() {
                     ) : null}
                   </button>
                 ))}
-                {!cashierTables.length ? <EmptyState message="No hay mesas con saldo o pagos pendientes por confirmar en este momento." /> : null}
+                {detachedCashierOrders.map((order) => {
+                  const table = tablesById.get(order.tableId);
+
+                  return (
+                    <button
+                      key={order.id}
+                      type="button"
+                      onClick={() => {
+                        shouldFocusCashierPaymentPanelRef.current = true;
+                        setSelectedDetachedCashierOrderId(order.id);
+                      }}
+                      className={`w-full rounded-[1.2rem] border p-4 text-left transition ${
+                        selectedDetachedCashierOrder?.id === order.id ? 'border-amberGlow/35 bg-amberGlow/10' : 'border-amberGlow/18 bg-amberGlow/[0.04]'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-[0.68rem] uppercase tracking-[0.22em] text-amberGlow">
+                            {table?.code ?? 'SIN MESA ACTIVA'}
+                          </p>
+                          <p className="mt-2 font-semibold text-ivory">{table?.name ?? 'Cuenta sin mesa activa'}</p>
+                        </div>
+                        <span className="rounded-full border border-amberGlow/20 bg-amberGlow/10 px-3 py-1 text-[0.65rem] uppercase tracking-[0.22em] text-amberGlow">
+                          Revisar
+                        </span>
+                      </div>
+                      <div className="mt-3 grid gap-2 text-sm text-mist sm:grid-cols-2">
+                        <p>Total: {formatCurrency(order.summary.totalDue)}</p>
+                        <p>Saldo: {formatCurrency(order.summary.remainingBalance)}</p>
+                        <p>Abierta: {formatDateTime(order.openedAt)}</p>
+                        <p>Por: {formatOperatorIdentity(order.openedByEmail)}</p>
+                      </div>
+                      <p className="mt-3 text-sm text-amberGlow">
+                        Esta cuenta esta abierta en la jornada, pero la mesa no la tiene como cuenta activa.
+                      </p>
+                    </button>
+                  );
+                })}
+                {!cashierTables.length && !detachedCashierOrders.length ? <EmptyState message="No hay mesas con saldo o pagos pendientes por confirmar en este momento." /> : null}
               </div>
             </Panel>
           </div>
 
           <div ref={cashierPaymentPanelRef} tabIndex={-1} className="focus:outline-none">
             <Panel
-              title={selectedCashierTable ? `Cobro de ${selectedCashierTable.name} · ${selectedCashierTable.code}` : 'Cobro de mesa'}
+              title={selectedCashierTitle}
               subtitle="Abonos parciales, total, por porcentaje o por productos"
             >
               {selectedCashierOrder ? (
                 <>
+                {selectedDetachedCashierOrder ? (
+                  <div className="mb-4 rounded-[1.1rem] border border-amberGlow/20 bg-amberGlow/10 px-4 py-3 text-sm leading-6 text-amberGlow">
+                    Esta cuenta quedo abierta sin estar vinculada como cuenta activa de la mesa. Fue abierta por {formatOperatorIdentity(selectedCashierOrder.openedByEmail)} el {formatDateTime(selectedCashierOrder.openedAt)}.
+                  </div>
+                ) : null}
                 <div className="grid gap-3 md:grid-cols-3">
                   <SummaryPill label="Total cuenta" value={formatCurrency(selectedCashierOrder.summary.totalDue)} />
                   <SummaryPill label="Pagado" value={formatCurrency(selectedCashierOrder.summary.totalPaid)} />
@@ -2694,6 +2775,7 @@ export function AdminPosView() {
                   <div className="mt-4 space-y-2">
                     {cashierProductGroups.map((group) => {
                         const voidTarget = group.items.find((item) => ['in_process', 'ready', 'picking_up', 'delivered'].includes(item.operationalStatus)) ?? null;
+                        const cancelTarget = group.items.find((item) => ['draft', 'sent', 'pending_preparation'].includes(item.operationalStatus)) ?? null;
                         const canVoidItem =
                           canVoidProcessedItems &&
                           voidTarget != null &&
@@ -2709,9 +2791,23 @@ export function AdminPosView() {
                                 <p className="mt-1 text-sm text-mist">
                                   {formatCurrency(group.totalPrice)} · {itemStatusLabels[group.operationalStatus]}
                                 </p>
+                                <p className="mt-1 text-xs uppercase tracking-[0.16em] text-cyanGlow/70">
+                                  Creado {formatDateTime(group.items[0]?.createdAt ?? selectedCashierOrder.openedAt)} · {formatOperatorIdentity(group.items[0]?.createdByEmail)}
+                                </p>
                                 {group.notes ? <p className="mt-1 text-sm text-amberGlow">{group.notes}</p> : null}
                                 {group.items.length > 1 ? <p className="mt-1 text-xs text-cyanGlow/70">Agrupa {group.items.length} tanda(s)</p> : null}
                               </div>
+                              <div className="flex flex-wrap gap-2">
+                              {cancelTarget ? (
+                                <button
+                                  type="button"
+                                  onClick={() => void handleCancelItem(cancelTarget)}
+                                  disabled={Boolean(busyAction)}
+                                  className="rounded-full border border-rose-300/18 bg-transparent px-3 py-1.5 text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-rose-100/75 transition hover:border-rose-300/35 hover:bg-rose-300/8 hover:text-rose-50 disabled:cursor-not-allowed disabled:opacity-40"
+                                >
+                                  {cancelTarget.operationalStatus === 'draft' ? 'Quitar borrador' : 'Cancelar'}
+                                </button>
+                              ) : null}
                               {voidTarget ? (
                                 <button
                                   type="button"
@@ -2722,6 +2818,7 @@ export function AdminPosView() {
                                   Anular 1
                                 </button>
                               ) : null}
+                              </div>
                             </div>
                           </article>
                         );

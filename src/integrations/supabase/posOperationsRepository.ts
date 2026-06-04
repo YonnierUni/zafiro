@@ -725,6 +725,98 @@ export async function cancelOrderItemInSupabase(itemId: string, reason: string, 
   return mapPosOrderItemRow(data);
 }
 
+export async function cancelClosedPaidOrderInSupabase(orderId: string, reason: string, actor: PosActorContext, currentOrderOverride?: PosOrderWithRelations) {
+  ensureCanCancelClosedPaidOrder(actor.roles);
+
+  const normalizedReason = reason.trim();
+  if (!normalizedReason) {
+    throw new Error('Debes escribir un motivo claro para anular la venta cerrada.');
+  }
+
+  const currentOrder = currentOrderOverride ?? await loadOrderWithRelationsById(orderId);
+
+  if (!currentOrder.closedAt) {
+    throw new Error('Esta cuenta aun no esta cerrada. Usa el flujo normal de caja o productos.');
+  }
+
+  if (currentOrder.financialStatus === 'cancelled') {
+    throw new Error('Esta venta ya esta anulada.');
+  }
+
+  const pendingPayments = currentOrder.payments.filter((payment) => payment.status === 'pending');
+  if (pendingPayments.length) {
+    throw new Error('Esta venta tiene pagos pendientes por validar. Resuelvelos antes de anularla.');
+  }
+
+  const supabase = getSupabaseClient();
+  const now = new Date().toISOString();
+
+  const { error: itemsError } = await supabase
+    .from('pos_order_items')
+    .update({
+      cancellation_reason: normalizedReason,
+      cancelled_at: now,
+      cancelled_by_email: actor.email,
+      financial_status: 'cancelled',
+      operational_status: 'cancelled',
+      updated_by_email: actor.email,
+    } as never)
+    .eq('order_id', orderId)
+    .not('operational_status', 'eq', 'cancelled');
+
+  throwIfError(itemsError, 'No fue posible anular los productos de la venta');
+
+  const { error: paymentsError } = await supabase
+    .from('pos_payments')
+    .update({
+      notes: normalizedReason,
+      rejected_at: now,
+      rejected_by_email: actor.email,
+      rejection_reason: normalizedReason,
+      status: 'rejected',
+    } as never)
+    .eq('order_id', orderId)
+    .eq('status', 'confirmed');
+
+  throwIfError(paymentsError, 'No fue posible reversar los pagos de la venta');
+
+  const { data: orderRow, error: orderError } = await supabase
+    .from('pos_orders')
+    .update({
+      cancellation_reason: normalizedReason,
+      financial_status: 'cancelled',
+      updated_at: now,
+    } as never)
+    .eq('id', orderId)
+    .select('*')
+    .single();
+
+  throwIfError(orderError, 'No fue posible marcar la venta como anulada');
+
+  await insertPosLog({
+    actor,
+    afterData: {
+      cancellationReason: normalizedReason,
+      orderId,
+      status: 'cancelled',
+    },
+    beforeData: currentOrder,
+    eventType: 'closed_sale_cancelled',
+    notes: normalizedReason,
+    orderId,
+    tableId: currentOrder.tableId,
+  });
+
+  const [items, payments] = await Promise.all([loadOrderItems(orderId), loadOrderPayments(orderId)]);
+
+  return {
+    ...mapPosOrderRow(orderRow),
+    items,
+    payments,
+    summary: buildOrderSummary(items, payments),
+  };
+}
+
 export async function voidProcessedOrderItemInSupabase(
   itemId: string,
   reason: string,
@@ -1196,47 +1288,56 @@ export async function loadSalesSessionHistoryFromSupabase(): Promise<PosSalesSes
   const supabase = getSupabaseClient();
   const [sessions, orders, payments] = await Promise.all([
     supabase.from('pos_sales_sessions').select('*').order('opened_at', { ascending: false }),
-    supabase.from('pos_orders').select('id,sales_session_id').not('sales_session_id', 'is', null),
-    supabase.from('pos_payments').select('id,sales_session_id,status,amount_applied').not('sales_session_id', 'is', null),
+    supabase.from('pos_orders').select('*').not('sales_session_id', 'is', null),
+    supabase.from('pos_payments').select('*').not('sales_session_id', 'is', null),
   ]);
 
   throwIfError(sessions.error, 'No fue posible leer el historial de jornadas');
   throwIfError(orders.error, 'No fue posible leer las cuentas asociadas a jornadas');
   throwIfError(payments.error, 'No fue posible leer los pagos asociados a jornadas');
 
-  const orderCountBySessionId = new Map<string, number>();
-  const paymentStatsBySessionId = new Map<string, { paymentCount: number; totalCollected: number }>();
+  const orderIds = (orders.data ?? []).map((order) => order.id);
+  const items = orderIds.length
+    ? await supabase.from('pos_order_items').select('*').in('order_id', orderIds)
+    : { data: [] as PosOrderItemRow[], error: null };
 
-  for (const order of orders.data ?? []) {
-    if (!order.sales_session_id) {
+  throwIfError(items.error, 'No fue posible leer los productos asociados a jornadas');
+
+  const ordersWithRelations = buildOrdersWithRelations(orders.data ?? [], items.data ?? [], payments.data ?? []);
+  const ordersBySessionId = new Map<string, PosOrderWithRelations[]>();
+  const paymentsBySessionId = new Map<string, PosPayment[]>();
+
+  for (const order of ordersWithRelations) {
+    if (!order.salesSessionId) {
       continue;
     }
-    orderCountBySessionId.set(order.sales_session_id, (orderCountBySessionId.get(order.sales_session_id) ?? 0) + 1);
+
+    ordersBySessionId.set(order.salesSessionId, [...(ordersBySessionId.get(order.salesSessionId) ?? []), order]);
   }
 
-  for (const payment of payments.data ?? []) {
-    if (!payment.sales_session_id) {
+  for (const payment of (payments.data ?? []).map(mapPosPaymentRow)) {
+    if (!payment.salesSessionId) {
       continue;
     }
 
-    const current = paymentStatsBySessionId.get(payment.sales_session_id) ?? { paymentCount: 0, totalCollected: 0 };
-    paymentStatsBySessionId.set(payment.sales_session_id, {
-      paymentCount: current.paymentCount + 1,
-      totalCollected: current.totalCollected + (payment.status === 'confirmed' ? Number(payment.amount_applied ?? 0) : 0),
-    });
+    paymentsBySessionId.set(payment.salesSessionId, [...(paymentsBySessionId.get(payment.salesSessionId) ?? []), payment]);
   }
 
   return (sessions.data ?? []).map((row) => {
     const session = mapPosSalesSessionRow(row);
-    const summary = session.summary;
-    const paymentStats = paymentStatsBySessionId.get(session.id);
+    const sessionOrders = ordersBySessionId.get(session.id) ?? [];
+    const sessionPayments = paymentsBySessionId.get(session.id) ?? [];
+    const liveSummary = sessionOrders.length || sessionPayments.length
+      ? buildSalesSessionSummary(sessionOrders, sessionPayments)
+      : session.summary;
 
     return {
       ...session,
-      orderCount: orderCountBySessionId.get(session.id) ?? summary?.orderCount ?? 0,
-      paymentCount: paymentStats?.paymentCount ?? 0,
-      totalCollected: paymentStats?.totalCollected ?? summary?.totalCollected ?? 0,
-      totalSold: summary?.grossSales ?? 0,
+      summary: liveSummary,
+      orderCount: liveSummary?.orderCount ?? 0,
+      paymentCount: liveSummary?.confirmedPayments ?? 0,
+      totalCollected: liveSummary?.totalCollected ?? 0,
+      totalSold: liveSummary?.grossSales ?? 0,
     };
   });
 }
@@ -1550,6 +1651,17 @@ async function loadOrderBundle(orderId: string) {
   return { order, items, payments };
 }
 
+async function loadOrderWithRelationsById(orderId: string): Promise<PosOrderWithRelations> {
+  const bundle = await loadOrderBundle(orderId);
+
+  return {
+    ...bundle.order,
+    items: bundle.items,
+    payments: bundle.payments,
+    summary: buildOrderSummary(bundle.items, bundle.payments),
+  };
+}
+
 function buildOrdersWithRelations(
   orders: PosOrderRow[],
   items: PosOrderItemRow[],
@@ -1780,6 +1892,14 @@ function ensureCanVoidProcessedItem(roles: StaffRole[]) {
   }
 
   throw new Error('Tu rol actual no puede anular productos por excepcion.');
+}
+
+function ensureCanCancelClosedPaidOrder(roles: StaffRole[]) {
+  if (roles.includes('superadmin')) {
+    return;
+  }
+
+  throw new Error('Solo superadmin puede anular ventas cerradas.');
 }
 
 function ensureCanManageSalesSessions(roles: StaffRole[]) {

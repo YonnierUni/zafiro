@@ -367,14 +367,14 @@ export function AdminSalesSessionsView() {
       const sessionSales = visibleClosedSales.filter((order) => order.salesSessionId === session.id);
 
       return sessionSales.flatMap((order) => {
-        const table = tablesById.get(order.tableId);
+        const table = order.tableId ? tablesById.get(order.tableId) : null;
         const orderBase = {
-          codigo_mesa: table?.code ?? '',
+          codigo_mesa: table?.code ?? order.tableCodeSnapshot ?? '',
           fecha_cierre: order.closedAt ? formatDateTime(order.closedAt) : '',
           fecha_contable: session.businessDate,
           jornada: session.sessionLabel,
           jornada_id: session.id,
-          mesa: table?.name ?? 'Mesa sin referencia',
+          mesa: table?.name ?? formatDetachedTableLabel(order.tableNameSnapshot, order.tableCodeSnapshot),
           orden_id: order.id,
         };
         const productRows = order.items
@@ -1126,13 +1126,29 @@ function buildSalesSessionsScopeSummary(sessions: PosSalesSessionHistoryEntry[],
   const productTotals = new Map<string, { quantity: number; totalAmount: number }>();
   let productsCount = 0;
 
-  for (const session of sessions) {
-    for (const product of session.summary?.products ?? []) {
-      const current = productTotals.get(product.productName) ?? { quantity: 0, totalAmount: 0 };
-      current.quantity += product.quantity;
-      current.totalAmount += product.totalAmount;
-      productTotals.set(product.productName, current);
-      productsCount += product.quantity;
+  if (closedSales.length) {
+    for (const order of closedSales) {
+      for (const item of order.items) {
+        if (item.operationalStatus === 'cancelled' || item.financialStatus === 'cancelled') {
+          continue;
+        }
+
+        const current = productTotals.get(item.productName) ?? { quantity: 0, totalAmount: 0 };
+        current.quantity += item.quantity;
+        current.totalAmount += item.totalPrice;
+        productTotals.set(item.productName, current);
+        productsCount += item.quantity;
+      }
+    }
+  } else {
+    for (const session of sessions) {
+      for (const product of session.summary?.products ?? []) {
+        const current = productTotals.get(product.productName) ?? { quantity: 0, totalAmount: 0 };
+        current.quantity += product.quantity;
+        current.totalAmount += product.totalAmount;
+        productTotals.set(product.productName, current);
+        productsCount += product.quantity;
+      }
     }
   }
 
@@ -1143,7 +1159,7 @@ function buildSalesSessionsScopeSummary(sessions: PosSalesSessionHistoryEntry[],
         return right.quantity - left.quantity;
       }
 
-      return right.totalAmount - left.totalAmount;
+      return left.productName.localeCompare(right.productName);
     });
   const topProduct = topProducts[0];
   const collectedTotal = sessions.reduce((sum, session) => sum + (session.summary?.totalCollected ?? session.totalCollected), 0);
@@ -1175,13 +1191,24 @@ function getSalesSessionProductsCount(session: PosSalesSessionHistoryEntry) {
 }
 
 function getSalesSessionTopProductLabel(session: PosSalesSessionHistoryEntry) {
-  const topProduct = [...(session.summary?.products ?? [])].sort((left, right) => {
-    if (right.quantity !== left.quantity) {
-      return right.quantity - left.quantity;
-    }
+  const productTotals = new Map<string, { quantity: number; totalAmount: number }>();
 
-    return right.totalAmount - left.totalAmount;
-  })[0];
+  for (const product of session.summary?.products ?? []) {
+    const current = productTotals.get(product.productName) ?? { quantity: 0, totalAmount: 0 };
+    current.quantity += product.quantity;
+    current.totalAmount += product.totalAmount;
+    productTotals.set(product.productName, current);
+  }
+
+  const topProduct = Array.from(productTotals.entries())
+    .map(([productName, totals]) => ({ productName, ...totals }))
+    .sort((left, right) => {
+      if (right.quantity !== left.quantity) {
+        return right.quantity - left.quantity;
+      }
+
+      return left.productName.localeCompare(right.productName);
+    })[0];
 
   return topProduct ? `${topProduct.productName} (${topProduct.quantity})` : 'Sin ventas';
 }
@@ -1368,12 +1395,28 @@ function formatDateTime(value: string) {
 }
 
 function resolveOrderTableLabel(order: PosOrderWithRelations, tablesById: Map<string, PosTableWithOrder>) {
-  const table = tablesById.get(order.tableId);
-  if (!table) {
-    return 'Mesa sin referencia';
+  const table = order.tableId ? tablesById.get(order.tableId) : null;
+  if (table) {
+    return `${table.name} - ${table.code}`;
   }
 
-  return `${table.name} - ${table.code}`;
+  return formatDetachedTableLabel(order.tableNameSnapshot, order.tableCodeSnapshot);
+}
+
+function formatDetachedTableLabel(tableName?: string | null, tableCode?: string | null) {
+  if (tableName && tableCode) {
+    return `${tableName} - ${tableCode}`;
+  }
+
+  if (tableName) {
+    return tableName;
+  }
+
+  if (tableCode) {
+    return `Mesa eliminada - ${tableCode}`;
+  }
+
+  return 'Mesa eliminada';
 }
 
 function formatPaymentMethodsSummary(entries: PosPayment[] | PosSalesSessionSummary['paymentMethods']) {

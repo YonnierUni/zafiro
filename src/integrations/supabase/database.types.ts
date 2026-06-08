@@ -154,7 +154,9 @@ export interface Database {
           opened_at: string;
           opened_by_email: string;
           sales_session_id: string | null;
-          table_id: string;
+          table_code_snapshot: string | null;
+          table_id: string | null;
+          table_name_snapshot: string | null;
           updated_at: string;
         };
         Insert: {
@@ -169,7 +171,9 @@ export interface Database {
           opened_at?: string;
           opened_by_email: string;
           sales_session_id?: string | null;
-          table_id: string;
+          table_code_snapshot?: string | null;
+          table_id?: string | null;
+          table_name_snapshot?: string | null;
           updated_at?: string;
         };
         Update: Partial<Database['public']['Tables']['pos_orders']['Insert']>;

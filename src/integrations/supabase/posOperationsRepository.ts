@@ -77,6 +77,11 @@ export interface MovePosActiveOrderResult {
   sourceTable: PosTable;
 }
 
+export interface DeletePosTableResult {
+  removed: boolean;
+  table: PosTable;
+}
+
 export interface ManualSalesSessionWindowInput {
   businessDate: string;
   closedAt: string;
@@ -140,14 +145,14 @@ export async function loadPosStateFromSupabase(): Promise<PosState> {
   const pendingPreparationItems = ordersWithRelations
     .flatMap((order) =>
       order.items.map((item) => {
-        const table = tablesById.get(order.tableId);
+        const table = order.tableId ? tablesById.get(order.tableId) : null;
         return {
           ...item,
           orderAssignedStaffEmail: order.assignedStaffEmail,
           orderOpenedByEmail: order.openedByEmail,
-          tableCode: table?.code ?? null,
+          tableCode: table?.code ?? order.tableCodeSnapshot ?? null,
           tableId: order.tableId,
-          tableName: table?.name ?? null,
+          tableName: table?.name ?? order.tableNameSnapshot ?? null,
         };
       }),
     )
@@ -322,7 +327,7 @@ export async function createPosTableInSupabase(input: CreatePosTableInput, actor
   return mapPosTableRow(data);
 }
 
-export async function deletePosTableInSupabase(tableId: string, actor: PosActorContext) {
+export async function deletePosTableInSupabase(tableId: string, actor: PosActorContext): Promise<DeletePosTableResult> {
   const supabase = getSupabaseClient();
   const table = await getTableById(tableId);
 
@@ -348,6 +353,11 @@ export async function deletePosTableInSupabase(tableId: string, actor: PosActorC
     eventType: 'table_deleted',
     notes: `Mesa ${table.code} eliminada`,
   });
+
+  return {
+    removed: true,
+    table,
+  };
 }
 
 export async function moveActiveOrderToTableInSupabase(sourceTableId: string, destinationTableId: string, actor: PosActorContext) {
@@ -456,14 +466,14 @@ export async function addItemsToTableInSupabase(tableId: string, items: AddOrder
     currentItems.push(createdItem);
   }
 
-  await touchTableOccupation(order.tableId, order.id, actor.email);
+  await touchTableOccupation(table.id, order.id, actor.email);
   await insertPosLog({
     actor,
     afterData: returnedItems,
     eventType: 'items_added',
     notes: `${items.length} linea(s) agregadas a ${table.code}`,
     orderId: order.id,
-    tableId: order.tableId,
+    tableId: table.id,
   });
 
   return returnedItems;
@@ -518,14 +528,14 @@ export async function addCustomItemToTableInSupabase(tableId: string, item: AddC
       .single();
 
     throwIfError(error, 'No fue posible agrupar el extra en borrador');
-    await touchTableOccupation(order.tableId, order.id, actor.email);
+    await touchTableOccupation(table.id, order.id, actor.email);
     await insertPosLog({
       actor,
       afterData: data,
       eventType: 'custom_item_added',
       notes: `${quantity} extra(s): ${productName}`,
       orderId: order.id,
-      tableId: order.tableId,
+      tableId: table.id,
     });
 
     return mapPosOrderItemRow(data);
@@ -555,14 +565,14 @@ export async function addCustomItemToTableInSupabase(tableId: string, item: AddC
 
   throwIfError(error, 'No fue posible agregar el extra a la mesa');
 
-  await touchTableOccupation(order.tableId, order.id, actor.email);
+  await touchTableOccupation(table.id, order.id, actor.email);
   await insertPosLog({
     actor,
     afterData: data,
     eventType: 'custom_item_added',
     notes: `${quantity} extra(s): ${productName}`,
     orderId: order.id,
-    tableId: order.tableId,
+    tableId: table.id,
   });
 
   return mapPosOrderItemRow(data);
@@ -1547,7 +1557,9 @@ async function ensureOpenOrderForTable(table: PosTable, actor: PosActorContext) 
       notes: '',
       opened_by_email: actor.email,
       sales_session_id: salesSession.id,
+      table_code_snapshot: table.code,
       table_id: table.id,
+      table_name_snapshot: table.name,
     } as never)
     .select('*')
     .single();
@@ -1642,7 +1654,7 @@ async function reconcileOrderState(orderId: string, actorEmail: string) {
   const { error: tableError } = await supabase
     .from('pos_tables')
     .update(tableUpdates as never)
-    .eq('id', refreshedBundle.order.tableId);
+    .eq('id', refreshedBundle.order.tableId ?? '');
   throwIfError(tableError, 'No fue posible reconciliar la mesa');
 }
 
@@ -2181,7 +2193,9 @@ function mapPosOrderRow(row: PosOrderRow): PosOrder {
     openedAt: row.opened_at,
     openedByEmail: row.opened_by_email,
     salesSessionId: row.sales_session_id,
+    tableCodeSnapshot: row.table_code_snapshot,
     tableId: row.table_id,
+    tableNameSnapshot: row.table_name_snapshot,
     updatedAt: row.updated_at,
   };
 }

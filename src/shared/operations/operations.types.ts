@@ -111,7 +111,9 @@ export interface PosPayment {
 
 export interface PosOrder {
   id: string;
-  tableId: string;
+  tableId?: string | null;
+  tableCodeSnapshot?: string | null;
+  tableNameSnapshot?: string | null;
   salesSessionId?: string | null;
   financialStatus: OrderFinancialStatus;
   openedAt: string;

@@ -1224,16 +1224,22 @@ export function AdminPosView() {
       return;
     }
 
-    const confirmed = window.confirm(`Se eliminara ${selectedTable.name} (${selectedTable.code}). Esta accion no se puede deshacer.`);
+    const confirmed = window.confirm(
+      `Se eliminara ${selectedTable.name} (${selectedTable.code}). Las ventas, productos y pagos historicos se conservaran.`,
+    );
     if (!confirmed) {
       return;
     }
 
     await executeAction(`Mesa ${selectedTable.code} eliminada`, async () => deletePosTableInSupabase(selectedTable.id, actor), {
-      onSuccess: () => {
-        setPosState((current) => (current ? removeTableFromPosState(current, selectedTable.id) : current));
-        setSelectedTableId((current) => (current === selectedTable.id ? null : current));
-        setIsTableSheetOpen(false);
+      onSuccess: (result) => {
+        setPosState((current) =>
+          current ? (result.removed ? removeTableFromPosState(current, selectedTable.id) : updateTableInPosState(current, result.table)) : current,
+        );
+        if (result.removed) {
+          setSelectedTableId((current) => (current === selectedTable.id ? null : current));
+          setIsTableSheetOpen(false);
+        }
       },
     });
   };
@@ -2700,7 +2706,9 @@ export function AdminPosView() {
                   </button>
                 ))}
                 {detachedCashierOrders.map((order) => {
-                  const table = tablesById.get(order.tableId);
+                  const table = order.tableId ? tablesById.get(order.tableId) : null;
+                  const tableCode = table?.code ?? order.tableCodeSnapshot ?? 'MESA ELIMINADA';
+                  const tableName = table?.name ?? formatDetachedTableLabel(order.tableNameSnapshot, order.tableCodeSnapshot);
 
                   return (
                     <button
@@ -2717,9 +2725,9 @@ export function AdminPosView() {
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <p className="text-[0.68rem] uppercase tracking-[0.22em] text-amberGlow">
-                            {table?.code ?? 'SIN MESA ACTIVA'}
+                            {tableCode}
                           </p>
-                          <p className="mt-2 font-semibold text-ivory">{table?.name ?? 'Cuenta sin mesa activa'}</p>
+                          <p className="mt-2 font-semibold text-ivory">{tableName}</p>
                         </div>
                         <span className="rounded-full border border-amberGlow/20 bg-amberGlow/10 px-3 py-1 text-[0.65rem] uppercase tracking-[0.22em] text-amberGlow">
                           Revisar
@@ -4205,6 +4213,13 @@ function removeTableFromPosState(state: PosState, tableId: string) {
   return rebuildDerivedStateFromTables(state, tables);
 }
 
+function updateTableInPosState(state: PosState, updatedTable: PosTable) {
+  const tables = state.tables
+    .map((table) => (table.id === updatedTable.id ? { ...table, ...updatedTable, activeOrder: table.activeOrder ?? null } : table))
+    .sort((left, right) => left.code.localeCompare(right.code));
+  return rebuildDerivedStateFromTables(state, tables);
+}
+
 function mergeMovedOrderIntoPosState(state: PosState, result: MovePosActiveOrderResult) {
   const existingOrder =
     state.openOrders.find((order) => order.id === result.order.id) ??
@@ -4604,12 +4619,28 @@ function formatOperatorIdentity(email: string | null | undefined) {
 }
 
 function resolveOrderTableLabel(order: PosOrderWithRelations, tablesById: Map<string, PosTableWithOrder>) {
-  const table = tablesById.get(order.tableId);
-  if (!table) {
-    return 'Mesa sin referencia';
+  const table = order.tableId ? tablesById.get(order.tableId) : null;
+  if (table) {
+    return `${table.name} - ${table.code}`;
   }
 
-  return `${table.name} · ${table.code}`;
+  return formatDetachedTableLabel(order.tableNameSnapshot, order.tableCodeSnapshot);
+}
+
+function formatDetachedTableLabel(tableName?: string | null, tableCode?: string | null) {
+  if (tableName && tableCode) {
+    return `${tableName} - ${tableCode}`;
+  }
+
+  if (tableName) {
+    return tableName;
+  }
+
+  if (tableCode) {
+    return `Mesa eliminada - ${tableCode}`;
+  }
+
+  return 'Mesa eliminada';
 }
 
 function formatDateTime(value: string) {
@@ -4670,6 +4701,7 @@ function formatPosEventLabel(eventType: string) {
     sales_session_closed: 'Jornada cerrada',
     sales_session_opened: 'Jornada abierta',
     table_created: 'Mesa creada',
+    table_deactivated: 'Mesa inactivada',
     table_deleted: 'Mesa eliminada',
   };
 

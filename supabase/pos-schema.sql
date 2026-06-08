@@ -74,7 +74,9 @@ execute function public.set_updated_at();
 
 create table if not exists public.pos_orders (
   id uuid primary key default gen_random_uuid(),
-  table_id uuid not null references public.pos_tables(id) on delete cascade,
+  table_id uuid references public.pos_tables(id) on delete set null,
+  table_code_snapshot text,
+  table_name_snapshot text,
   sales_session_id uuid,
   financial_status text not null check (financial_status in ('pending_payment', 'partially_paid', 'paid_total', 'cancelled')) default 'pending_payment',
   opened_at timestamptz not null default timezone('utc', now()),
@@ -96,7 +98,7 @@ execute function public.set_updated_at();
 
 create table if not exists public.pos_order_items (
   id uuid primary key default gen_random_uuid(),
-  order_id uuid not null references public.pos_orders(id) on delete cascade,
+  order_id uuid not null references public.pos_orders(id) on delete restrict,
   menu_item_source_key text references public.menu_items(source_key),
   product_name text not null,
   product_slug text not null,
@@ -137,7 +139,7 @@ create index if not exists pos_order_items_prep_area_idx on public.pos_order_ite
 
 create table if not exists public.pos_payments (
   id uuid primary key default gen_random_uuid(),
-  order_id uuid not null references public.pos_orders(id) on delete cascade,
+  order_id uuid not null references public.pos_orders(id) on delete restrict,
   sales_session_id uuid,
   method text not null check (method in ('cash', 'nequi', 'bank_transfer', 'card', 'other')),
   status text not null check (status in ('pending', 'confirmed', 'rejected')) default 'pending',
@@ -190,6 +192,42 @@ alter table public.pos_orders
   add constraint pos_orders_sales_session_id_fkey
   foreign key (sales_session_id) references public.pos_sales_sessions(id) on delete set null;
 
+alter table public.pos_orders
+  drop constraint if exists pos_orders_table_id_fkey;
+
+alter table public.pos_orders
+  add column if not exists table_code_snapshot text,
+  add column if not exists table_name_snapshot text;
+
+update public.pos_orders o
+set
+  table_code_snapshot = coalesce(o.table_code_snapshot, t.code),
+  table_name_snapshot = coalesce(o.table_name_snapshot, t.name)
+from public.pos_tables t
+where o.table_id = t.id
+  and (o.table_code_snapshot is null or o.table_name_snapshot is null);
+
+alter table public.pos_orders
+  alter column table_id drop not null;
+
+alter table public.pos_orders
+  add constraint pos_orders_table_id_fkey
+  foreign key (table_id) references public.pos_tables(id) on delete set null;
+
+alter table public.pos_order_items
+  drop constraint if exists pos_order_items_order_id_fkey;
+
+alter table public.pos_order_items
+  add constraint pos_order_items_order_id_fkey
+  foreign key (order_id) references public.pos_orders(id) on delete restrict;
+
+alter table public.pos_payments
+  drop constraint if exists pos_payments_order_id_fkey;
+
+alter table public.pos_payments
+  add constraint pos_payments_order_id_fkey
+  foreign key (order_id) references public.pos_orders(id) on delete restrict;
+
 alter table public.pos_payments
   drop constraint if exists pos_payments_sales_session_id_fkey;
 
@@ -204,9 +242,9 @@ create index if not exists pos_sales_sessions_business_date_idx on public.pos_sa
 
 create table if not exists public.pos_order_status_logs (
   id uuid primary key default gen_random_uuid(),
-  table_id uuid references public.pos_tables(id) on delete cascade,
-  order_id uuid references public.pos_orders(id) on delete cascade,
-  order_item_id uuid references public.pos_order_items(id) on delete cascade,
+  table_id uuid references public.pos_tables(id) on delete set null,
+  order_id uuid references public.pos_orders(id) on delete set null,
+  order_item_id uuid references public.pos_order_items(id) on delete set null,
   event_type text not null,
   actor_email text not null,
   actor_role text,
@@ -219,6 +257,27 @@ create table if not exists public.pos_order_status_logs (
 create index if not exists pos_order_status_logs_order_idx on public.pos_order_status_logs(order_id);
 create index if not exists pos_order_status_logs_item_idx on public.pos_order_status_logs(order_item_id);
 create index if not exists pos_order_status_logs_created_idx on public.pos_order_status_logs(created_at desc);
+
+alter table public.pos_order_status_logs
+  drop constraint if exists pos_order_status_logs_table_id_fkey;
+
+alter table public.pos_order_status_logs
+  add constraint pos_order_status_logs_table_id_fkey
+  foreign key (table_id) references public.pos_tables(id) on delete set null;
+
+alter table public.pos_order_status_logs
+  drop constraint if exists pos_order_status_logs_order_id_fkey;
+
+alter table public.pos_order_status_logs
+  add constraint pos_order_status_logs_order_id_fkey
+  foreign key (order_id) references public.pos_orders(id) on delete set null;
+
+alter table public.pos_order_status_logs
+  drop constraint if exists pos_order_status_logs_order_item_id_fkey;
+
+alter table public.pos_order_status_logs
+  add constraint pos_order_status_logs_order_item_id_fkey
+  foreign key (order_item_id) references public.pos_order_items(id) on delete set null;
 
 create table if not exists public.pos_operational_flow_settings (
   area text primary key check (area in ('bar', 'kitchen')),

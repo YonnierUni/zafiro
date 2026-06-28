@@ -2782,7 +2782,7 @@ export function AdminPosView() {
                   </summary>
                   <div className="mt-4 space-y-2">
                     {cashierProductGroups.map((group) => {
-                        const voidTarget = group.items.find((item) => ['in_process', 'ready', 'picking_up', 'delivered'].includes(item.operationalStatus)) ?? null;
+                        const voidTarget = findVoidableProcessedItemForGroup(selectedCashierOrder, group, outstandingByItem);
                         const cancelTarget = group.items.find((item) => ['draft', 'sent', 'pending_preparation'].includes(item.operationalStatus)) ?? null;
                         const canVoidItem =
                           canVoidProcessedItems &&
@@ -4348,6 +4348,24 @@ function isPaymentUnitKey(value: string) {
 
 function parsePaymentTargetItemId(value: string) {
   return isPaymentUnitKey(value) ? value.split('::')[0] ?? value : value;
+}
+
+function findVoidableProcessedItemForGroup(
+  order: PosOrderWithRelations | null,
+  group: CashierProductGroup,
+  outstandingByItem: Map<string, number>,
+) {
+  if (!order) {
+    return null;
+  }
+
+  const processedItems = group.items.filter((item) => ['in_process', 'ready', 'picking_up', 'delivered'].includes(item.operationalStatus));
+  return (
+    processedItems.find((item) => {
+      const outstanding = outstandingByItem.get(item.id) ?? item.totalPrice;
+      return outstanding >= item.unitPrice;
+    }) ?? null
+  );
 }
 
 function buildOutstandingByItem(order: PosOrderWithRelations | null) {

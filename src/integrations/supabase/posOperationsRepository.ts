@@ -943,14 +943,13 @@ export async function voidProcessedOrderItemInSupabase(
   }
 
   const confirmedPayments = orderBundle.payments.filter((payment) => payment.status === 'confirmed');
-  const itemHasConfirmedTargetedPayment = confirmedPayments.some(
-    (payment) => payment.allocationMode === 'items' && payment.targetItemIds?.some((target) => parsePaymentTargetItemId(target) === currentItem.id),
-  );
-  if (itemHasConfirmedTargetedPayment) {
-    throw new Error('Este producto ya tiene un pago confirmado aplicado directamente. Primero resuelve el pago antes de anularlo.');
+  const voidedAmount = currentItem.unitPrice * normalizedVoidQuantity;
+  const outstandingByItem = allocateConfirmedPayments(orderBundle.items, confirmedPayments);
+  const currentItemOutstanding = outstandingByItem.get(currentItem.id) ?? currentItem.totalPrice;
+  if (currentItemOutstanding < voidedAmount) {
+    throw new Error('Esta unidad ya esta cubierta por pagos confirmados. Anula una unidad sin pago o resuelve el pago antes.');
   }
 
-  const voidedAmount = currentItem.unitPrice * normalizedVoidQuantity;
   const nextBillableTotal = orderBundle.items
     .filter((item) => item.operationalStatus !== 'cancelled' && item.financialStatus !== 'cancelled')
     .reduce((sum, item) => sum + item.totalPrice, 0) - voidedAmount;

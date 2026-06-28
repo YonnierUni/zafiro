@@ -123,23 +123,20 @@ export async function loadPosStateFromSupabase(): Promise<PosState> {
   const supabase = getSupabaseClient();
   const [tables, orders, items, payments, logs, salesSessions, operationalFlowSettings] = await Promise.all([
     supabase.from('pos_tables').select('*').order('code', { ascending: true }),
-    supabase.from('pos_orders').select('*').order('opened_at', { ascending: false }),
-    supabase.from('pos_order_items').select('*').order('created_at', { ascending: true }),
-    supabase.from('pos_payments').select('*').order('created_at', { ascending: true }),
+    loadAllPosOrdersRows(),
+    loadAllPosOrderItemRows(),
+    loadAllPosPaymentRows(),
     supabase.from('pos_order_status_logs').select('*').order('created_at', { ascending: false }).limit(120),
     supabase.from('pos_sales_sessions').select('*').order('opened_at', { ascending: false }).limit(10),
     loadPosOperationalFlowSettingsRows(),
   ]);
 
   throwIfError(tables.error, 'No fue posible leer las mesas POS');
-  throwIfError(orders.error, 'No fue posible leer las ordenes POS');
-  throwIfError(items.error, 'No fue posible leer las lineas POS');
-  throwIfError(payments.error, 'No fue posible leer los pagos POS');
   throwIfError(logs.error, 'No fue posible leer la trazabilidad POS');
   throwIfError(salesSessions.error, 'No fue posible leer las jornadas POS');
   const mappedOperationalFlowSettings = mapPosOperationalFlowSettingsRows(operationalFlowSettings);
 
-  const ordersWithRelations = buildOrdersWithRelations(orders.data ?? [], items.data ?? [], payments.data ?? []);
+  const ordersWithRelations = buildOrdersWithRelations(orders, items, payments);
   const tablesWithOrders = buildTablesWithOrders(tables.data ?? [], ordersWithRelations);
   const tablesById = new Map((tables.data ?? []).map((table) => [table.id, table]));
   const pendingPreparationItems = ordersWithRelations
@@ -159,7 +156,7 @@ export async function loadPosStateFromSupabase(): Promise<PosState> {
     .filter((item) => !TERMINAL_ITEM_STATUSES.has(item.operationalStatus) && item.operationalStatus !== 'draft')
     .sort((left, right) => resolvePreparationQueueTimestamp(left).localeCompare(resolvePreparationQueueTimestamp(right)));
 
-  const mappedPayments = (payments.data ?? []).map(mapPosPaymentRow);
+  const mappedPayments = payments.map(mapPosPaymentRow);
   const mappedSalesSessions = (salesSessions.data ?? []).map((row) => {
     const mappedSession = mapPosSalesSessionRow(row);
     const sessionOrders = ordersWithRelations.filter((order) => order.salesSessionId === mappedSession.id);
@@ -286,6 +283,90 @@ async function loadPosOperationalFlowSettingsRows() {
 
   throwIfError(error, 'No fue posible leer la configuracion operativa POS');
   return (data ?? []) as unknown as PosOperationalFlowSettingsRow[];
+}
+
+async function loadAllPosOrdersRows() {
+  const rows: PosOrderRow[] = [];
+  const pageSize = 1000;
+  const supabase = getSupabaseClient();
+
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await supabase
+      .from('pos_orders')
+      .select('*')
+      .order('opened_at', { ascending: false })
+      .range(from, from + pageSize - 1);
+
+    throwIfError(error, 'No fue posible leer las ordenes POS');
+    rows.push(...(data ?? []));
+
+    if (!data || data.length < pageSize) {
+      return rows;
+    }
+  }
+}
+
+async function loadAllPosOrderItemRows() {
+  const rows: PosOrderItemRow[] = [];
+  const pageSize = 1000;
+  const supabase = getSupabaseClient();
+
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await supabase
+      .from('pos_order_items')
+      .select('*')
+      .order('created_at', { ascending: true })
+      .range(from, from + pageSize - 1);
+
+    throwIfError(error, 'No fue posible leer las lineas POS');
+    rows.push(...(data ?? []));
+
+    if (!data || data.length < pageSize) {
+      return rows;
+    }
+  }
+}
+
+async function loadAllPosPaymentRows() {
+  const rows: PosPaymentRow[] = [];
+  const pageSize = 1000;
+  const supabase = getSupabaseClient();
+
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await supabase
+      .from('pos_payments')
+      .select('*')
+      .order('created_at', { ascending: true })
+      .range(from, from + pageSize - 1);
+
+    throwIfError(error, 'No fue posible leer los pagos POS');
+    rows.push(...(data ?? []));
+
+    if (!data || data.length < pageSize) {
+      return rows;
+    }
+  }
+}
+
+async function loadAllPosSalesSessionRows() {
+  const rows: PosSalesSessionRow[] = [];
+  const pageSize = 1000;
+  const supabase = getSupabaseClient();
+
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await supabase
+      .from('pos_sales_sessions')
+      .select('*')
+      .order('opened_at', { ascending: false })
+      .range(from, from + pageSize - 1);
+
+    throwIfError(error, 'No fue posible leer el historial de jornadas');
+    rows.push(...(data ?? []));
+
+    if (!data || data.length < pageSize) {
+      return rows;
+    }
+  }
 }
 
 export async function createPosTableInSupabase(input: CreatePosTableInput, actor: PosActorContext) {
@@ -1295,25 +1376,18 @@ export async function closeActiveSalesSessionInSupabase(actor: PosActorContext, 
 }
 
 export async function loadSalesSessionHistoryFromSupabase(): Promise<PosSalesSessionHistoryEntry[]> {
-  const supabase = getSupabaseClient();
-  const [sessions, orders, payments] = await Promise.all([
-    supabase.from('pos_sales_sessions').select('*').order('opened_at', { ascending: false }),
-    supabase.from('pos_orders').select('*').not('sales_session_id', 'is', null),
-    supabase.from('pos_payments').select('*').not('sales_session_id', 'is', null),
+  const [sessions, allOrders, allPayments, allItems] = await Promise.all([
+    loadAllPosSalesSessionRows(),
+    loadAllPosOrdersRows(),
+    loadAllPosPaymentRows(),
+    loadAllPosOrderItemRows(),
   ]);
+  const orders = allOrders.filter((order) => order.sales_session_id != null);
+  const payments = allPayments.filter((payment) => payment.sales_session_id != null);
+  const orderIds = new Set(orders.map((order) => order.id));
+  const items = allItems.filter((item) => orderIds.has(item.order_id));
 
-  throwIfError(sessions.error, 'No fue posible leer el historial de jornadas');
-  throwIfError(orders.error, 'No fue posible leer las cuentas asociadas a jornadas');
-  throwIfError(payments.error, 'No fue posible leer los pagos asociados a jornadas');
-
-  const orderIds = (orders.data ?? []).map((order) => order.id);
-  const items = orderIds.length
-    ? await supabase.from('pos_order_items').select('*').in('order_id', orderIds)
-    : { data: [] as PosOrderItemRow[], error: null };
-
-  throwIfError(items.error, 'No fue posible leer los productos asociados a jornadas');
-
-  const ordersWithRelations = buildOrdersWithRelations(orders.data ?? [], items.data ?? [], payments.data ?? []);
+  const ordersWithRelations = buildOrdersWithRelations(orders, items, payments);
   const ordersBySessionId = new Map<string, PosOrderWithRelations[]>();
   const paymentsBySessionId = new Map<string, PosPayment[]>();
 
@@ -1325,7 +1399,7 @@ export async function loadSalesSessionHistoryFromSupabase(): Promise<PosSalesSes
     ordersBySessionId.set(order.salesSessionId, [...(ordersBySessionId.get(order.salesSessionId) ?? []), order]);
   }
 
-  for (const payment of (payments.data ?? []).map(mapPosPaymentRow)) {
+  for (const payment of payments.map(mapPosPaymentRow)) {
     if (!payment.salesSessionId) {
       continue;
     }
@@ -1333,7 +1407,7 @@ export async function loadSalesSessionHistoryFromSupabase(): Promise<PosSalesSes
     paymentsBySessionId.set(payment.salesSessionId, [...(paymentsBySessionId.get(payment.salesSessionId) ?? []), payment]);
   }
 
-  return (sessions.data ?? []).map((row) => {
+  return sessions.map((row) => {
     const session = mapPosSalesSessionRow(row);
     const sessionOrders = ordersBySessionId.get(session.id) ?? [];
     const sessionPayments = paymentsBySessionId.get(session.id) ?? [];
@@ -2021,37 +2095,126 @@ async function getPaymentById(paymentId: string) {
 
 async function loadOrderItems(orderId: string) {
   const supabase = getSupabaseClient();
-  const { data, error } = await supabase.from('pos_order_items').select('*').eq('order_id', orderId).order('created_at', { ascending: true });
-  throwIfError(error, 'No fue posible leer las lineas de la orden');
-  return (data ?? []).map(mapPosOrderItemRow);
+  const pageSize = 1000;
+  const rows: PosOrderItemRow[] = [];
+
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await supabase
+      .from('pos_order_items')
+      .select('*')
+      .eq('order_id', orderId)
+      .order('created_at', { ascending: true })
+      .range(from, from + pageSize - 1);
+    throwIfError(error, 'No fue posible leer las lineas de la orden');
+    rows.push(...(data ?? []));
+
+    if ((data?.length ?? 0) < pageSize) {
+      break;
+    }
+  }
+
+  return rows.map(mapPosOrderItemRow);
 }
 
 async function loadOrderPayments(orderId: string) {
   const supabase = getSupabaseClient();
-  const { data, error } = await supabase.from('pos_payments').select('*').eq('order_id', orderId).order('created_at', { ascending: true });
-  throwIfError(error, 'No fue posible leer los pagos de la orden');
-  return (data ?? []).map(mapPosPaymentRow);
+  const pageSize = 1000;
+  const rows: PosPaymentRow[] = [];
+
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await supabase
+      .from('pos_payments')
+      .select('*')
+      .eq('order_id', orderId)
+      .order('created_at', { ascending: true })
+      .range(from, from + pageSize - 1);
+    throwIfError(error, 'No fue posible leer los pagos de la orden');
+    rows.push(...(data ?? []));
+
+    if ((data?.length ?? 0) < pageSize) {
+      break;
+    }
+  }
+
+  return rows.map(mapPosPaymentRow);
 }
 
 async function loadOrderItemsByOrderIds(orderIds: string[]) {
+  if (!orderIds.length) {
+    return [] as PosOrderItem[];
+  }
+
   const supabase = getSupabaseClient();
-  const { data, error } = await supabase.from('pos_order_items').select('*').in('order_id', orderIds).order('created_at', { ascending: true });
-  throwIfError(error, 'No fue posible leer los productos de la jornada');
-  return (data ?? []).map(mapPosOrderItemRow);
+  const chunkSize = 200;
+  const pageSize = 1000;
+  const rows: PosOrderItemRow[] = [];
+
+  for (let index = 0; index < orderIds.length; index += chunkSize) {
+    const chunk = orderIds.slice(index, index + chunkSize);
+
+    for (let from = 0; ; from += pageSize) {
+      const { data, error } = await supabase
+        .from('pos_order_items')
+        .select('*')
+        .in('order_id', chunk)
+        .order('created_at', { ascending: true })
+        .range(from, from + pageSize - 1);
+      throwIfError(error, 'No fue posible leer los productos de la jornada');
+      rows.push(...(data ?? []));
+
+      if ((data?.length ?? 0) < pageSize) {
+        break;
+      }
+    }
+  }
+
+  return rows.map(mapPosOrderItemRow).sort((left, right) => left.createdAt.localeCompare(right.createdAt));
 }
 
 async function loadPaymentsBySalesSessionId(salesSessionId: string) {
   const supabase = getSupabaseClient();
-  const { data, error } = await supabase.from('pos_payments').select('*').eq('sales_session_id', salesSessionId).order('created_at', { ascending: true });
-  throwIfError(error, 'No fue posible leer los pagos de la jornada');
-  return (data ?? []).map(mapPosPaymentRow);
+  const pageSize = 1000;
+  const rows: PosPaymentRow[] = [];
+
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await supabase
+      .from('pos_payments')
+      .select('*')
+      .eq('sales_session_id', salesSessionId)
+      .order('created_at', { ascending: true })
+      .range(from, from + pageSize - 1);
+    throwIfError(error, 'No fue posible leer los pagos de la jornada');
+    rows.push(...(data ?? []));
+
+    if ((data?.length ?? 0) < pageSize) {
+      break;
+    }
+  }
+
+  return rows.map(mapPosPaymentRow);
 }
 
 async function loadOrdersForSalesSession(salesSessionId: string) {
   const supabase = getSupabaseClient();
-  const { data, error } = await supabase.from('pos_orders').select('*').eq('sales_session_id', salesSessionId).order('opened_at', { ascending: true });
-  throwIfError(error, 'No fue posible leer las ordenes de la jornada');
-  return (data ?? []).map(mapPosOrderRow);
+  const pageSize = 1000;
+  const rows: PosOrderRow[] = [];
+
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await supabase
+      .from('pos_orders')
+      .select('*')
+      .eq('sales_session_id', salesSessionId)
+      .order('opened_at', { ascending: true })
+      .range(from, from + pageSize - 1);
+    throwIfError(error, 'No fue posible leer las ordenes de la jornada');
+    rows.push(...(data ?? []));
+
+    if ((data?.length ?? 0) < pageSize) {
+      break;
+    }
+  }
+
+  return rows.map(mapPosOrderRow);
 }
 
 async function loadOrdersByIds(orderIds: string[]) {
@@ -2060,9 +2223,30 @@ async function loadOrdersByIds(orderIds: string[]) {
   }
 
   const supabase = getSupabaseClient();
-  const { data, error } = await supabase.from('pos_orders').select('*').in('id', orderIds).order('opened_at', { ascending: true });
-  throwIfError(error, 'No fue posible completar las cuentas asociadas a la jornada');
-  return (data ?? []).map(mapPosOrderRow);
+  const chunkSize = 200;
+  const pageSize = 1000;
+  const rows: PosOrderRow[] = [];
+
+  for (let index = 0; index < orderIds.length; index += chunkSize) {
+    const chunk = orderIds.slice(index, index + chunkSize);
+
+    for (let from = 0; ; from += pageSize) {
+      const { data, error } = await supabase
+        .from('pos_orders')
+        .select('*')
+        .in('id', chunk)
+        .order('opened_at', { ascending: true })
+        .range(from, from + pageSize - 1);
+      throwIfError(error, 'No fue posible completar las cuentas asociadas a la jornada');
+      rows.push(...(data ?? []));
+
+      if ((data?.length ?? 0) < pageSize) {
+        break;
+      }
+    }
+  }
+
+  return rows.map(mapPosOrderRow).sort((left, right) => left.openedAt.localeCompare(right.openedAt));
 }
 
 async function getSalesSessionById(salesSessionId: string) {

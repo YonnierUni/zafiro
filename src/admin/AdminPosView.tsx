@@ -1332,7 +1332,7 @@ export function AdminPosView() {
               unitPrice: parsedCustomItemUnitPrice,
             },
             actor,
-          ),
+        ),
         {
           skipBusy: true,
           showToast: true,

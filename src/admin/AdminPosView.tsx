@@ -2007,11 +2007,10 @@ export function AdminPosView() {
     <AdminLayout>
       <section className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div className="max-w-3xl">
-          <p className="text-[0.72rem] uppercase tracking-[0.28em] text-cyanGlow/80">Operacion real POS</p>
-          <h1 className="mt-3 font-display text-[1.7rem] leading-[0.95] text-ivory sm:text-[3.4rem]">Mesas, preparacion y caja</h1>
+          <p className="text-[0.72rem] uppercase tracking-[0.28em] text-cyanGlow/80">POS operativo</p>
+          <h1 className="mt-3 font-display text-[1.7rem] leading-[0.95] text-ivory sm:text-[3.4rem]">Mesas, cocina, bar y caja</h1>
           <p className="mt-3 hidden max-w-2xl text-[0.98rem] leading-7 text-mist sm:block sm:mt-5 sm:text-lg sm:leading-8">
-            Esta vista ya trabaja sobre Supabase y separa el flujo del local por mesas, productos, preparacion y cobro, con actualizacion en
-            tiempo real entre roles.
+            Opera cuentas por mesa, controla preparacion y registra cobros con trazabilidad del turno.
           </p>
         </div>
 

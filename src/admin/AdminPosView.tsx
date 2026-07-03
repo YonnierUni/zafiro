@@ -361,6 +361,14 @@ export function AdminPosView() {
     let isMounted = true;
 
     const loadProducts = async () => {
+      if (!canOperateFloor) {
+        if (isMounted) {
+          setProducts([]);
+          setSelectedProductSourceKey('');
+        }
+        return;
+      }
+
       const nextProducts = await loadPosProductOptionsFromSupabase();
       if (isMounted) {
         setProducts(nextProducts);
@@ -379,35 +387,35 @@ export function AdminPosView() {
     return () => {
       isMounted = false;
     };
-  }, [selectedProductSourceKey]);
+  }, [canOperateFloor, selectedProductSourceKey]);
 
   useEffect(() => {
     let isMounted = true;
 
     const handleRealtimeEvent = (event: PosRealtimeEvent) => {
+      const currentState = posStateRef.current;
       setPosState((current) => (current ? applyRealtimeEventToPosState(current, event) : current));
 
-      const realtimeSignal = resolveRealtimeSignal(event, posStateRef.current, actorRef.current.email);
-      if (!realtimeSignal) {
-        return;
+      const realtimeSignal = resolveRealtimeSignal(event, currentState, actorRef.current.email);
+
+      if (realtimeSignal) {
+        const access = workspaceAccessRef.current;
+        const shouldNotify =
+          (realtimeSignal.target === 'kitchen' && access.canOperateKitchen) ||
+          (realtimeSignal.target === 'bar' && access.canOperateBar) ||
+          (realtimeSignal.target === 'floor' && access.canOperateFloor) ||
+          (realtimeSignal.target === 'cashier' && access.canOperateCashier);
+
+        if (shouldNotify) {
+          triggerRealtimeAttention(
+            realtimeSignal,
+            audioContextRef.current,
+            recentRealtimeNotificationKeysRef.current,
+          );
+        }
       }
 
-      const access = workspaceAccessRef.current;
-      const shouldNotify =
-        (realtimeSignal.target === 'kitchen' && access.canOperateKitchen) ||
-        (realtimeSignal.target === 'bar' && access.canOperateBar) ||
-        (realtimeSignal.target === 'floor' && access.canOperateFloor) ||
-        (realtimeSignal.target === 'cashier' && access.canOperateCashier);
-
-      if (!shouldNotify) {
-        return;
-      }
-
-      triggerRealtimeAttention(
-        realtimeSignal,
-        audioContextRef.current,
-        recentRealtimeNotificationKeysRef.current,
-      );
+      return shouldReloadAfterRealtimeEvent(event, currentState);
     };
 
     const loadState = async (initial = false) => {
@@ -416,7 +424,9 @@ export function AdminPosView() {
           setIsLoading(true);
         }
 
-        const nextState = await loadPosStateFromSupabase();
+        const nextState = await loadPosStateFromSupabase({
+          includeLogs: actorRef.current.roles.includes('superadmin') || workspaceAccessRef.current.canOperateCashier,
+        });
         if (!isMounted) {
           return;
         }
@@ -3710,6 +3720,47 @@ function applyRealtimeEventToPosState(state: PosState, event: PosRealtimeEvent) 
   return state;
 }
 
+function shouldReloadAfterRealtimeEvent(event: PosRealtimeEvent, state: PosState | null) {
+  if (!state) {
+    return true;
+  }
+
+  if (event.table === 'pos_order_status_logs') {
+    return false;
+  }
+
+  if (event.table === 'pos_tables') {
+    const tableId = asString(event.newRecord?.id ?? event.oldRecord?.id);
+    return !tableId || !state.tables.some((table) => table.id === tableId);
+  }
+
+  if (event.table === 'pos_order_items') {
+    const itemId = asString(event.newRecord?.id ?? event.oldRecord?.id);
+    return !itemId || !findRealtimeOrderItem(state, itemId);
+  }
+
+  if (event.table === 'pos_payments') {
+    const orderId = asString(event.newRecord?.order_id ?? event.oldRecord?.order_id);
+    const paymentId = asString(event.newRecord?.id ?? event.oldRecord?.id);
+    const orderExists = Boolean(
+      orderId && [...state.openOrders, ...state.closedSales].some((order) => order.id === orderId),
+    );
+
+    return !paymentId || !orderExists;
+  }
+
+  if (event.table === 'pos_orders') {
+    const orderId = asString(event.newRecord?.id ?? event.oldRecord?.id);
+    const existingOrder = orderId
+      ? state.openOrders.find((order) => order.id === orderId) ?? state.closedSales.find((order) => order.id === orderId)
+      : null;
+
+    return !existingOrder;
+  }
+
+  return true;
+}
+
 function resolveRealtimeSignal(event: PosRealtimeEvent, state: PosState | null, currentActorEmail: string): RealtimeSignal | null {
   if (event.table === 'pos_order_items' && event.eventType === 'UPDATE' && event.newRecord) {
     const newStatus = String(event.newRecord.operational_status ?? '');
@@ -5036,11 +5087,11 @@ function getPosFallbackSyncInterval(tab: WorkspaceTab) {
   switch (tab) {
     case 'kitchen':
     case 'bar':
-      return 3000;
+      return 15000;
     case 'cashier':
-      return 4000;
+      return 20000;
     case 'floor':
-      return 5000;
+      return 30000;
     default:
       return 0;
   }

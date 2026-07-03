@@ -122,7 +122,10 @@ export function AdminSalesSessionsView() {
     setErrorMessage(null);
     setIsLoading(true);
     try {
-      const [history, posState] = await Promise.all([loadSalesSessionHistoryFromSupabase(), loadPosStateFromSupabase()]);
+      const [history, posState] = await Promise.all([
+        loadSalesSessionHistoryFromSupabase(),
+        loadPosStateFromSupabase({ includeHistoricalRows: true }),
+      ]);
       setSessions(history);
       setClosedSales(posState.closedSales);
       setTables(posState.tables);

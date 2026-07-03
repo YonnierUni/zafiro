@@ -100,6 +100,11 @@ export interface UpdatePosOperationalFlowSettingsInput {
   usePickingUp: boolean;
 }
 
+export interface LoadPosStateOptions {
+  includeHistoricalRows?: boolean;
+  includeLogs?: boolean;
+}
+
 const TERMINAL_ITEM_STATUSES = new Set<OrderOperationalStatus>(['delivered', 'cancelled']);
 const DRAFT_EDITABLE_STATUSES = new Set<OrderOperationalStatus>(['draft']);
 const CONTROLLED_CANCEL_STATUSES = new Set<OrderOperationalStatus>(['draft', 'sent', 'pending_preparation']);
@@ -123,14 +128,14 @@ export interface PosRealtimeEvent {
   table: PosRealtimeTable;
 }
 
-export async function loadPosStateFromSupabase(): Promise<PosState> {
+export async function loadPosStateFromSupabase(options: LoadPosStateOptions = {}): Promise<PosState> {
   const supabase = getSupabaseClient();
-  const [tables, orders, items, payments, logs, salesSessions, operationalFlowSettings] = await Promise.all([
+  const shouldIncludeLogs = options.includeLogs ?? true;
+  const [tables, logs, salesSessions, operationalFlowSettings] = await Promise.all([
     supabase.from('pos_tables').select('*').order('code', { ascending: true }),
-    loadAllPosOrdersRows(),
-    loadAllPosOrderItemRows(),
-    loadAllPosPaymentRows(),
-    supabase.from('pos_order_status_logs').select('*').order('created_at', { ascending: false }).limit(120),
+    shouldIncludeLogs
+      ? supabase.from('pos_order_status_logs').select('*').order('created_at', { ascending: false }).limit(120)
+      : Promise.resolve({ data: [] as PosLogRow[], error: null }),
     supabase.from('pos_sales_sessions').select('*').order('opened_at', { ascending: false }).limit(10),
     loadPosOperationalFlowSettingsRows(),
   ]);
@@ -139,6 +144,12 @@ export async function loadPosStateFromSupabase(): Promise<PosState> {
   throwIfError(logs.error, 'No fue posible leer la trazabilidad POS');
   throwIfError(salesSessions.error, 'No fue posible leer las jornadas POS');
   const mappedOperationalFlowSettings = mapPosOperationalFlowSettingsRows(operationalFlowSettings);
+  const activeSalesSessionRow = (salesSessions.data ?? []).find((session) => session.status === 'open') ?? null;
+  const orders = options.includeHistoricalRows ? await loadAllPosOrdersRows() : await loadOperationalPosOrdersRows(activeSalesSessionRow?.id ?? null);
+  const orderIds = orders.map((order) => order.id);
+  const [items, payments] = options.includeHistoricalRows
+    ? await Promise.all([loadAllPosOrderItemRows(), loadAllPosPaymentRows()])
+    : await Promise.all([loadPosOrderItemRowsByOrderIds(orderIds), loadOperationalPosPaymentRows(orderIds, activeSalesSessionRow?.id ?? null)]);
 
   const ordersWithRelations = buildOrdersWithRelations(orders, items, payments);
   const tablesWithOrders = buildTablesWithOrders(tables.data ?? [], ordersWithRelations);
@@ -305,6 +316,33 @@ async function loadAllPosOrdersRows() {
   }
 }
 
+async function loadOperationalPosOrdersRows(activeSalesSessionId: string | null) {
+  const rows: PosOrderRow[] = [];
+  const pageSize = 1000;
+  const supabase = getSupabaseClient();
+
+  for (let from = 0; ; from += pageSize) {
+    let query = supabase
+      .from('pos_orders')
+      .select('*')
+      .order('opened_at', { ascending: false })
+      .range(from, from + pageSize - 1);
+
+    query = activeSalesSessionId
+      ? query.or(`closed_at.is.null,sales_session_id.eq.${activeSalesSessionId}`)
+      : query.is('closed_at', null);
+
+    const { data, error } = await query;
+
+    throwIfError(error, 'No fue posible leer las ordenes POS');
+    rows.push(...(data ?? []));
+
+    if (!data || data.length < pageSize) {
+      return rows;
+    }
+  }
+}
+
 async function loadAllPosOrderItemRows() {
   const rows: PosOrderItemRow[] = [];
   const pageSize = 1000;
@@ -326,6 +364,39 @@ async function loadAllPosOrderItemRows() {
   }
 }
 
+async function loadPosOrderItemRowsByOrderIds(orderIds: string[]) {
+  if (!orderIds.length) {
+    return [] as PosOrderItemRow[];
+  }
+
+  const rows: PosOrderItemRow[] = [];
+  const chunkSize = 200;
+  const pageSize = 1000;
+  const supabase = getSupabaseClient();
+
+  for (let index = 0; index < orderIds.length; index += chunkSize) {
+    const chunk = orderIds.slice(index, index + chunkSize);
+
+    for (let from = 0; ; from += pageSize) {
+      const { data, error } = await supabase
+        .from('pos_order_items')
+        .select('*')
+        .in('order_id', chunk)
+        .order('created_at', { ascending: true })
+        .range(from, from + pageSize - 1);
+
+      throwIfError(error, 'No fue posible leer las lineas POS');
+      rows.push(...(data ?? []));
+
+      if (!data || data.length < pageSize) {
+        break;
+      }
+    }
+  }
+
+  return rows.sort((left, right) => left.created_at.localeCompare(right.created_at));
+}
+
 async function loadAllPosPaymentRows() {
   const rows: PosPaymentRow[] = [];
   const pageSize = 1000;
@@ -345,6 +416,77 @@ async function loadAllPosPaymentRows() {
       return rows;
     }
   }
+}
+
+async function loadOperationalPosPaymentRows(orderIds: string[], activeSalesSessionId: string | null) {
+  const byId = new Map<string, PosPaymentRow>();
+  const rowsByOrder = await loadPosPaymentRowsByOrderIds(orderIds);
+
+  for (const row of rowsByOrder) {
+    byId.set(row.id, row);
+  }
+
+  const supabase = getSupabaseClient();
+  const pageSize = 1000;
+  const filters = ['status.eq.pending'];
+
+  if (activeSalesSessionId) {
+    filters.push(`sales_session_id.eq.${activeSalesSessionId}`);
+  }
+
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await supabase
+      .from('pos_payments')
+      .select('*')
+      .or(filters.join(','))
+      .order('created_at', { ascending: true })
+      .range(from, from + pageSize - 1);
+
+    throwIfError(error, 'No fue posible leer los pagos POS');
+
+    for (const row of data ?? []) {
+      byId.set(row.id, row);
+    }
+
+    if (!data || data.length < pageSize) {
+      break;
+    }
+  }
+
+  return Array.from(byId.values()).sort((left, right) => left.created_at.localeCompare(right.created_at));
+}
+
+async function loadPosPaymentRowsByOrderIds(orderIds: string[]) {
+  if (!orderIds.length) {
+    return [] as PosPaymentRow[];
+  }
+
+  const rows: PosPaymentRow[] = [];
+  const chunkSize = 200;
+  const pageSize = 1000;
+  const supabase = getSupabaseClient();
+
+  for (let index = 0; index < orderIds.length; index += chunkSize) {
+    const chunk = orderIds.slice(index, index + chunkSize);
+
+    for (let from = 0; ; from += pageSize) {
+      const { data, error } = await supabase
+        .from('pos_payments')
+        .select('*')
+        .in('order_id', chunk)
+        .order('created_at', { ascending: true })
+        .range(from, from + pageSize - 1);
+
+      throwIfError(error, 'No fue posible leer los pagos POS');
+      rows.push(...(data ?? []));
+
+      if (!data || data.length < pageSize) {
+        break;
+      }
+    }
+  }
+
+  return rows.sort((left, right) => left.created_at.localeCompare(right.created_at));
 }
 
 async function loadAllPosSalesSessionRows() {
@@ -1584,19 +1726,22 @@ export async function updatePosPaymentStatusInSupabase(
   return mapPosPaymentRow(data);
 }
 
-export function subscribeToPosRealtime(onChange: () => void, onEvent?: (event: PosRealtimeEvent) => void) {
+export function subscribeToPosRealtime(onChange: () => void, onEvent?: (event: PosRealtimeEvent) => boolean | void) {
   const supabase = getSupabaseClient();
   const channel: RealtimeChannel = supabase.channel('zafiro-pos-live');
   const buildHandler =
     (table: PosRealtimeTable) =>
     (payload: RealtimePostgresChangesPayload<Record<string, unknown>>) => {
-      onEvent?.({
+      const shouldReload = onEvent?.({
         eventType: payload.eventType,
         newRecord: payload.new ?? null,
         oldRecord: payload.old ?? null,
         table,
       });
-      onChange();
+
+      if (shouldReload !== false) {
+        onChange();
+      }
     };
 
   channel

@@ -41,16 +41,19 @@ type PosLogRow = Database['public']['Tables']['pos_order_status_logs']['Row'];
 type StaffProfileRow = Database['public']['Tables']['staff_profiles']['Row'];
 type PosOperationalFlowSettingsRow = {
   area: string;
+  use_direct_delivery: boolean | null;
   use_in_process: boolean | null;
   use_picking_up: boolean | null;
 };
 
 export const defaultPosOperationalFlowSettings: PosOperationalFlowSettings = {
   bar: {
+    useDirectDelivery: false,
     useInProcess: false,
     usePickingUp: false,
   },
   kitchen: {
+    useDirectDelivery: false,
     useInProcess: false,
     usePickingUp: false,
   },
@@ -92,6 +95,7 @@ export interface ManualSalesSessionWindowInput {
 
 export interface UpdatePosOperationalFlowSettingsInput {
   area: PreparationArea;
+  useDirectDelivery: boolean;
   useInProcess: boolean;
   usePickingUp: boolean;
 }
@@ -251,6 +255,7 @@ export async function updatePosOperationalFlowSettingsInSupabase(input: UpdatePo
   const supabase = getSupabaseClient();
   const row = {
     area: input.area,
+    use_direct_delivery: input.useDirectDelivery,
     use_in_process: input.useInProcess,
     use_picking_up: input.usePickingUp,
     updated_at: new Date().toISOString(),
@@ -266,20 +271,14 @@ export async function updatePosOperationalFlowSettingsInSupabase(input: UpdatePo
     notes: `Configuracion operativa actualizada para ${input.area === 'bar' ? 'bar' : 'cocina'}`,
   });
 
-  return {
-    ...defaultPosOperationalFlowSettings,
-    [input.area]: {
-      useInProcess: input.useInProcess,
-      usePickingUp: input.usePickingUp,
-    },
-  };
+  return mapPosOperationalFlowSettingsRows(await loadPosOperationalFlowSettingsRows());
 }
 
 async function loadPosOperationalFlowSettingsRows() {
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
     .from('pos_operational_flow_settings' as never)
-    .select('area, use_in_process, use_picking_up' as never);
+    .select('*' as never);
 
   throwIfError(error, 'No fue posible leer la configuracion operativa POS');
   return (data ?? []) as unknown as PosOperationalFlowSettingsRow[];
@@ -1208,6 +1207,49 @@ export async function markOrderItemDeliveredInSupabase(itemId: string, actor: Po
   return mapPosOrderItemRow(data);
 }
 
+export async function markOrderItemDirectDeliveredInSupabase(itemId: string, actor: PosActorContext, currentItemOverride?: PosOrderItem) {
+  const item = currentItemOverride ?? (await getOrderItemById(itemId));
+  ensureDirectDeliveryPermission(item, actor.roles);
+  const operationalFlowSettings = mapPosOperationalFlowSettingsRows(await loadPosOperationalFlowSettingsRows());
+  if (!operationalFlowSettings[item.prepArea].useDirectDelivery) {
+    throw new Error(`La entrega directa no esta activa para ${item.prepArea === 'bar' ? 'bar' : 'cocina'}.`);
+  }
+
+  const allowedCurrent: OrderOperationalStatus[] = ['pending_preparation', 'sent', 'in_process', 'ready', 'picking_up'];
+  if (!allowedCurrent.includes(item.operationalStatus)) {
+    throw new Error('Solo puedes entregar directo un producto activo de preparacion o despacho.');
+  }
+
+  const supabase = getSupabaseClient();
+  const now = new Date().toISOString();
+  const { data, error } = await supabase
+    .from('pos_order_items')
+    .update({
+      delivered_at: now,
+      delivered_by_email: actor.email,
+      operational_status: 'delivered',
+      ready_at: item.readyAt ?? now,
+      updated_by_email: actor.email,
+    } as never)
+    .eq('id', itemId)
+    .in('operational_status', allowedCurrent)
+    .select('*')
+    .single();
+
+  throwIfError(error, 'No fue posible entregar directo la linea');
+  await reconcileOrderState(item.orderId, actor.email);
+  await insertPosLog({
+    actor,
+    afterData: data,
+    beforeData: item,
+    eventType: 'item_direct_delivered',
+    orderId: item.orderId,
+    orderItemId: item.id,
+  });
+
+  return mapPosOrderItemRow(data);
+}
+
 export async function recordPosPaymentInSupabase(orderId: string, input: RecordPaymentInput, actor: PosActorContext) {
   const orderBundle = await loadOrderBundle(orderId);
   const summary = buildOrderSummary(orderBundle.items, orderBundle.payments);
@@ -1963,6 +2005,22 @@ function ensurePreparationPermission(item: PosOrderItem, roles: StaffRole[]) {
   throw new Error('Tu rol actual no puede operar esta cola de preparacion.');
 }
 
+function ensureDirectDeliveryPermission(item: PosOrderItem, roles: StaffRole[]) {
+  if (roles.includes('superadmin') || roles.includes('waiter')) {
+    return;
+  }
+
+  if (item.prepArea === 'kitchen' && roles.includes('kitchen')) {
+    return;
+  }
+
+  if (item.prepArea === 'bar' && roles.includes('bar')) {
+    return;
+  }
+
+  throw new Error('Tu rol actual no puede entregar directo este producto.');
+}
+
 function ensureCanMoveActiveOrder(roles: StaffRole[]) {
   if (roles.includes('superadmin') || roles.includes('waiter')) {
     return;
@@ -2551,6 +2609,7 @@ function mapPosOperationalFlowSettingsRows(rows: PosOperationalFlowSettingsRow[]
       return {
         ...settings,
         [row.area]: {
+          useDirectDelivery: Boolean(row.use_direct_delivery),
           useInProcess: Boolean(row.use_in_process),
           usePickingUp: Boolean(row.use_picking_up),
         },

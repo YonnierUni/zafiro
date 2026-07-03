@@ -201,6 +201,7 @@ export interface PosOrderStatusLog {
 }
 
 export interface PosOperationalFlowAreaSettings {
+  useDirectDelivery: boolean;
   useInProcess: boolean;
   usePickingUp: boolean;
 }

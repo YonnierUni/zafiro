@@ -103,6 +103,7 @@ export function AdminPosSettingsView() {
       const nextSettings = await updatePosOperationalFlowSettingsInSupabase(
         {
           area,
+          useDirectDelivery: field === 'useDirectDelivery' ? value : operationalFlowSettings[area].useDirectDelivery,
           useInProcess: field === 'useInProcess' ? value : operationalFlowSettings[area].useInProcess,
           usePickingUp: field === 'usePickingUp' ? value : operationalFlowSettings[area].usePickingUp,
         },
@@ -189,7 +190,7 @@ function OperationalFlowSettingsPanel({
 
   return (
     <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,0.34fr)]">
-      <Panel title="Flujo operativo" subtitle="Activa o salta pasos intermedios por area. Los estados se conservan para trazabilidad.">
+      <Panel title="Flujo operativo" subtitle="Elige que pasos ve cada area. Cada cambio afecta los botones disponibles y conserva la trazabilidad.">
         <div className="grid gap-3 md:grid-cols-2">
           {areas.map(({ area, label }) => (
             <article key={area} className="rounded-[1.1rem] border border-white/8 bg-white/[0.02] p-4">
@@ -202,16 +203,31 @@ function OperationalFlowSettingsPanel({
                 </div>
               </div>
 
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                <FlowSwitch
+                  checked={settings[area].useDirectDelivery}
+                  description="Activo: muestra Entregar directo y salta Listo. Apagado: primero se marca Listo."
+                  disabled={Boolean(busyAction) || savingArea === area}
+                  flowOff="Pedido -> Listo -> Entregado"
+                  flowOn="Pedido -> Entregado"
+                  label="Entrega directa"
+                  onChange={(value) => void onToggle(area, 'useDirectDelivery', value)}
+                />
                 <FlowSwitch
                   checked={settings[area].useInProcess}
+                  description="Activo: agrega En proceso antes de Listo. Apagado: el producto pasa directo a Listo."
                   disabled={Boolean(busyAction) || savingArea === area}
+                  flowOff="Pedido -> Listo"
+                  flowOn="Pedido -> En proceso -> Listo"
                   label="En proceso"
                   onChange={(value) => void onToggle(area, 'useInProcess', value)}
                 />
                 <FlowSwitch
                   checked={settings[area].usePickingUp}
+                  description="Activo: agrega Ir a recoger antes de Entregado. Apagado: Listo se entrega con un toque."
                   disabled={Boolean(busyAction) || savingArea === area}
+                  flowOff="Listo -> Entregado"
+                  flowOn="Listo -> Recogiendo -> Entregado"
                   label="Recogiendo"
                   onChange={(value) => void onToggle(area, 'usePickingUp', value)}
                 />
@@ -233,25 +249,42 @@ function OperationalFlowSettingsPanel({
 
 function FlowSwitch({
   checked,
+  description,
   disabled,
+  flowOff,
+  flowOn,
   label,
   onChange,
 }: {
   checked: boolean;
+  description: string;
   disabled: boolean;
+  flowOff: string;
+  flowOn: string;
   label: string;
   onChange: (checked: boolean) => void;
 }) {
   return (
-    <label className={`flex items-center justify-between gap-3 rounded-[1rem] border border-white/8 bg-black/15 px-3 py-2.5 ${disabled ? 'opacity-60' : ''}`}>
-      <span className="text-sm font-medium text-ivory">{label}</span>
-      <input
-        type="checkbox"
-        checked={checked}
-        disabled={disabled}
-        onChange={(event) => onChange(event.target.checked)}
-        className="h-5 w-10 cursor-pointer accent-cyanGlow disabled:cursor-not-allowed"
-      />
+    <label className={`block rounded-[1rem] border border-white/8 bg-black/15 px-3 py-3 ${disabled ? 'opacity-60' : ''}`}>
+      <span className="flex items-start justify-between gap-3">
+        <span className="min-w-0">
+          <span className="block text-sm font-semibold text-ivory">{label}</span>
+          <span className={`mt-1 block text-[0.62rem] font-semibold uppercase tracking-[0.16em] ${checked ? 'text-emerald-200' : 'text-mist'}`}>
+            {checked ? 'Activo' : 'Apagado'}
+          </span>
+        </span>
+        <input
+          type="checkbox"
+          checked={checked}
+          disabled={disabled}
+          onChange={(event) => onChange(event.target.checked)}
+          className="mt-0.5 h-5 w-10 shrink-0 cursor-pointer accent-cyanGlow disabled:cursor-not-allowed"
+        />
+      </span>
+      <span className="mt-3 block text-xs leading-5 text-mist">{description}</span>
+      <span className="mt-3 block rounded-[0.75rem] border border-white/8 bg-white/[0.03] px-2.5 py-2 text-xs leading-5 text-cyanGlow">
+        {checked ? flowOn : flowOff}
+      </span>
     </label>
   );
 }

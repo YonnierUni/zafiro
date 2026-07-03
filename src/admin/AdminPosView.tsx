@@ -31,6 +31,7 @@ import {
   deletePosTableInSupabase,
   loadPosProductOptionsFromSupabase,
   loadPosStateFromSupabase,
+  markOrderItemDirectDeliveredInSupabase,
   markOrderItemDeliveredInSupabase,
   markOrderItemPickingUpInSupabase,
   moveActiveOrderToTableInSupabase,
@@ -181,6 +182,7 @@ export function AdminPosView() {
   const [cashierRightPanel, setCashierRightPanel] = useState<CashierRightPanel>('summary');
   const [selectedDetachedCashierOrderId, setSelectedDetachedCashierOrderId] = useState<string | null>(null);
   const [selectedHistoricalSessionId, setSelectedHistoricalSessionId] = useState<string | null>(null);
+  const [expandedTraceLogIds, setExpandedTraceLogIds] = useState<string[]>([]);
   const [highlightedPendingPaymentId, setHighlightedPendingPaymentId] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -700,18 +702,13 @@ export function AdminPosView() {
   const kitchenQueue = posState?.pendingPreparationKitchen ?? [];
   const barQueue = posState?.pendingPreparationBar ?? [];
   const operationalFlowSettings = posState?.operationalFlowSettings ?? defaultPosOperationalFlowSettings;
-  const kitchenDirectDispatchSourceKeys = useMemo(() => new Set<string>(), []);
-  const directDispatchSourceKeys = useMemo(
-    () => new Set(products.filter((product) => product.type.trim().toLowerCase() === 'bebidas').map((product) => product.sourceKey)),
-    [products],
-  );
   const sortedKitchenQueue = useMemo(
-    () => sortPreparationQueueForUi(kitchenQueue, kitchenDirectDispatchSourceKeys, operationalFlowSettings),
-    [kitchenDirectDispatchSourceKeys, kitchenQueue, operationalFlowSettings],
+    () => sortPreparationQueueForUi(kitchenQueue, operationalFlowSettings),
+    [kitchenQueue, operationalFlowSettings],
   );
   const sortedBarQueue = useMemo(
-    () => sortPreparationQueueForUi(barQueue, directDispatchSourceKeys, operationalFlowSettings),
-    [barQueue, directDispatchSourceKeys, operationalFlowSettings],
+    () => sortPreparationQueueForUi(barQueue, operationalFlowSettings),
+    [barQueue, operationalFlowSettings],
   );
   const allCashierOrders = useMemo(() => [...(posState?.openOrders ?? []), ...closedSales], [closedSales, posState?.openOrders]);
   const selectedReadyCount = selectedOrder?.items.filter((item) => item.operationalStatus === 'ready').length ?? 0;
@@ -1158,6 +1155,7 @@ export function AdminPosView() {
               area,
               useInProcess: nextAreaSettings.useInProcess,
               usePickingUp: nextAreaSettings.usePickingUp,
+              useDirectDelivery: nextAreaSettings.useDirectDelivery,
             },
             actor,
           ),
@@ -1180,6 +1178,10 @@ export function AdminPosView() {
     } finally {
       setSavingOperationalFlowArea(null);
     }
+  };
+
+  const toggleTraceLogDetails = (logId: string) => {
+    setExpandedTraceLogIds((current) => (current.includes(logId) ? current.filter((id) => id !== logId) : [...current, logId]));
   };
 
   const handleCreateTable = async () => {
@@ -1497,6 +1499,14 @@ export function AdminPosView() {
 
   const handleDelivered = async (item: PosOrderItem) => {
     await executeAction(`${item.productName} entregado`, async () => markOrderItemDeliveredInSupabase(item.id, actor, item), {
+      onSuccess: (updatedItem) => {
+        setPosState((current) => (current ? mergeUpdatedItemsIntoPosState(current, [updatedItem]) : current));
+      },
+    });
+  };
+
+  const handleDirectDelivered = async (item: PosOrderItem) => {
+    await executeAction(`${item.productName} entregado directo`, async () => markOrderItemDirectDeliveredInSupabase(item.id, actor, item), {
       onSuccess: (updatedItem) => {
         setPosState((current) => (current ? mergeUpdatedItemsIntoPosState(current, [updatedItem]) : current));
       },
@@ -1861,7 +1871,10 @@ export function AdminPosView() {
             </div>
 
             {selectedOrderVisibleItems.length ? (
-              selectedOrderVisibleItems.map((item) => (
+              selectedOrderVisibleItems.map((item) => {
+                const isDirectDispatch = shouldUseDirectDeliveryStep(item, operationalFlowSettings);
+
+                return (
                 <article
                   key={item.id}
                   ref={(element) => {
@@ -1946,6 +1959,11 @@ export function AdminPosView() {
                         </button>
                       </>
                     ) : null}
+                    {!editingItemId && isDirectDispatch && isDirectDeliveryCandidate(item) ? (
+                      <button type="button" onClick={() => void handleDirectDelivered(item)} className={primaryButtonClassName}>
+                        Entregar directo
+                      </button>
+                    ) : null}
                     {!editingItemId && item.operationalStatus === 'ready' ? (
                       shouldUsePickingUpStep(item, operationalFlowSettings) ? (
                         <button type="button" onClick={() => void handlePickingUp(item)} className={ghostButtonClassName}>
@@ -1964,7 +1982,8 @@ export function AdminPosView() {
                     ) : null}
                   </div>
                 </article>
-              ))
+                );
+              })
             ) : (
               <EmptyState message="Esta mesa todavia no tiene productos activos. Agrega la primera tanda desde el panel superior." />
             )}
@@ -2382,7 +2401,10 @@ export function AdminPosView() {
                     </div>
 
                     {selectedOrder?.items.length ? (
-                      selectedOrder.items.map((item) => (
+                      selectedOrder.items.map((item) => {
+                        const isDirectDispatch = shouldUseDirectDeliveryStep(item, operationalFlowSettings);
+
+                        return (
                         <article
                           key={item.id}
                           ref={(element) => {
@@ -2467,6 +2489,11 @@ export function AdminPosView() {
                                 </button>
                               </>
                             ) : null}
+                            {!editingItemId && isDirectDispatch && isDirectDeliveryCandidate(item) ? (
+                              <button type="button" onClick={() => void handleDirectDelivered(item)} className={primaryButtonClassName}>
+                                Entregar directo
+                              </button>
+                            ) : null}
                             {!editingItemId && item.operationalStatus === 'ready' ? (
                               shouldUsePickingUpStep(item, operationalFlowSettings) ? (
                                 <button type="button" onClick={() => void handlePickingUp(item)} className={ghostButtonClassName}>
@@ -2485,7 +2512,8 @@ export function AdminPosView() {
                             ) : null}
                           </div>
                         </article>
-                      ))
+                        );
+                      })
                     ) : (
                       <EmptyState message="Esta mesa todavia no tiene productos activos. Agrega la primera tanda desde el panel superior." />
                     )}
@@ -2631,13 +2659,55 @@ export function AdminPosView() {
 
               <Panel title="Trazabilidad reciente" subtitle="Ultimos eventos operativos y financieros">
                 <div className="space-y-3">
-                  {(posState?.logs ?? []).slice(0, 8).map((log) => (
-                    <article key={log.id} className="rounded-[1.1rem] border border-white/8 bg-white/[0.02] p-3">
-                      <p className="text-sm font-medium text-ivory">{log.eventType}</p>
-                      <p className="mt-1 text-xs text-mist">{new Date(log.createdAt).toLocaleString('es-CO')}</p>
-                      {log.notes ? <p className="mt-2 text-sm text-mist">{log.notes}</p> : null}
-                    </article>
-                  ))}
+                  {(posState?.logs ?? []).slice(0, 8).map((log) => {
+                    const contextLabel = resolveLogContextLabel(log, ordersById, tablesById);
+                    const productLabel = resolveLogProductLabel(log);
+                    const lineItems = resolveLogLineItems(log);
+                    const isExpanded = expandedTraceLogIds.includes(log.id);
+
+                    return (
+                      <article key={log.id} className="rounded-[1.1rem] border border-white/8 bg-white/[0.02] p-3">
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-ivory">{formatPosEventLabel(log.eventType)}</p>
+                            <p className="mt-1 text-xs uppercase tracking-[0.16em] text-cyanGlow/75">{formatDateTime(log.createdAt)}</p>
+                          </div>
+                          <span className="rounded-full border border-white/8 bg-black/20 px-2.5 py-1 text-[0.62rem] uppercase tracking-[0.18em] text-mist">
+                            {formatOperatorIdentity(log.actorEmail)}
+                          </span>
+                        </div>
+                        {contextLabel ? <p className="mt-3 text-sm text-mist">{contextLabel}</p> : null}
+                        {productLabel ? <p className="mt-1 text-sm text-ivory">{productLabel}</p> : null}
+                        {log.notes ? <p className="mt-2 text-sm text-cyanGlow">{log.notes}</p> : null}
+                        {lineItems.length ? (
+                          <div className="mt-3">
+                            <button
+                              type="button"
+                              onClick={() => toggleTraceLogDetails(log.id)}
+                              className="interactive-button rounded-full border border-cyanGlow/30 bg-cyanGlow/10 px-3 py-1.5 text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-cyanGlow transition hover:border-cyanGlow/55 hover:bg-cyanGlow/16"
+                            >
+                              {isExpanded ? 'Ocultar lineas' : `Ver lineas (${lineItems.length})`}
+                            </button>
+                            {isExpanded ? (
+                              <div className="mt-3 space-y-2">
+                                {lineItems.map((line, index) => (
+                                  <div key={`${log.id}-${line.id ?? index}`} className="rounded-[0.9rem] border border-white/8 bg-black/20 px-3 py-2">
+                                    <div className="flex items-start justify-between gap-3">
+                                      <p className="text-sm font-medium text-ivory">{line.productName}</p>
+                                      <span className="shrink-0 text-xs uppercase tracking-[0.16em] text-cyanGlow">{line.quantity} und.</span>
+                                    </div>
+                                    <p className="mt-1 text-xs uppercase tracking-[0.16em] text-mist">{line.prepArea === 'kitchen' ? 'Cocina' : 'Bar'}</p>
+                                    {line.notes ? <p className="mt-1 text-sm text-amberGlow">{line.notes}</p> : null}
+                                  </div>
+                                ))}
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : null}
+                      </article>
+                    );
+                  })}
+                  {!(posState?.logs ?? []).length ? <EmptyState message="Todavia no hay movimientos recientes en la trazabilidad POS." /> : null}
                 </div>
               </Panel>
             </div>
@@ -2649,8 +2719,8 @@ export function AdminPosView() {
         <PreparationQueuePanel
           areaLabel="Cocina"
           busyAction={busyAction}
-          directDispatchSourceKeys={kitchenDirectDispatchSourceKeys}
           items={sortedKitchenQueue}
+          onDirectDelivered={handleDirectDelivered}
           onMoveStatus={handleMovePrepStatus}
           operationalFlowSettings={operationalFlowSettings}
           title="Cola de cocina"
@@ -2661,8 +2731,8 @@ export function AdminPosView() {
         <PreparationQueuePanel
           areaLabel="Bar"
           busyAction={busyAction}
-          directDispatchSourceKeys={directDispatchSourceKeys}
           items={sortedBarQueue}
+          onDirectDelivered={handleDirectDelivered}
           onMoveStatus={handleMovePrepStatus}
           operationalFlowSettings={operationalFlowSettings}
           title="Cola de bebidas"
@@ -3387,23 +3457,54 @@ export function AdminPosView() {
 
             {cashierRightPanel === 'movements' ? (
               <div className="space-y-3">
-                {(posState?.logs ?? []).slice(0, 12).map((log) => (
-                  <article key={log.id} className="rounded-[1.2rem] border border-white/8 bg-white/[0.02] p-4">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <p className="font-medium text-ivory">{formatPosEventLabel(log.eventType)}</p>
-                        <p className="mt-1 text-xs uppercase tracking-[0.18em] text-cyanGlow/75">{formatDateTime(log.createdAt)}</p>
+                {(posState?.logs ?? []).slice(0, 12).map((log) => {
+                  const contextLabel = resolveLogContextLabel(log, ordersById, tablesById);
+                  const productLabel = resolveLogProductLabel(log);
+                  const lineItems = resolveLogLineItems(log);
+                  const isExpanded = expandedTraceLogIds.includes(log.id);
+
+                  return (
+                    <article key={log.id} className="rounded-[1.2rem] border border-white/8 bg-white/[0.02] p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="font-medium text-ivory">{formatPosEventLabel(log.eventType)}</p>
+                          <p className="mt-1 text-xs uppercase tracking-[0.18em] text-cyanGlow/75">{formatDateTime(log.createdAt)}</p>
+                        </div>
+                        <span className="rounded-full border border-white/8 bg-black/20 px-3 py-1 text-[0.65rem] uppercase tracking-[0.22em] text-mist">
+                          {formatOperatorIdentity(log.actorEmail)}
+                        </span>
                       </div>
-                      <span className="rounded-full border border-white/8 bg-black/20 px-3 py-1 text-[0.65rem] uppercase tracking-[0.22em] text-mist">
-                        {formatOperatorIdentity(log.actorEmail)}
-                      </span>
-                    </div>
-                    {resolveLogContextLabel(log, ordersById, tablesById) ? (
-                      <p className="mt-3 text-sm text-mist">{resolveLogContextLabel(log, ordersById, tablesById)}</p>
-                    ) : null}
-                    {log.notes ? <p className="mt-2 text-sm text-cyanGlow">{log.notes}</p> : null}
-                  </article>
-                ))}
+                      {contextLabel ? <p className="mt-3 text-sm text-mist">{contextLabel}</p> : null}
+                      {productLabel ? <p className="mt-1 text-sm text-ivory">{productLabel}</p> : null}
+                      {log.notes ? <p className="mt-2 text-sm text-cyanGlow">{log.notes}</p> : null}
+                      {lineItems.length ? (
+                        <div className="mt-3">
+                          <button
+                            type="button"
+                            onClick={() => toggleTraceLogDetails(log.id)}
+                            className="interactive-button rounded-full border border-cyanGlow/30 bg-cyanGlow/10 px-3 py-1.5 text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-cyanGlow transition hover:border-cyanGlow/55 hover:bg-cyanGlow/16"
+                          >
+                            {isExpanded ? 'Ocultar lineas' : `Ver lineas (${lineItems.length})`}
+                          </button>
+                          {isExpanded ? (
+                            <div className="mt-3 space-y-2">
+                              {lineItems.map((line, index) => (
+                                <div key={`${log.id}-${line.id ?? index}`} className="rounded-[0.9rem] border border-white/8 bg-black/20 px-3 py-2">
+                                  <div className="flex items-start justify-between gap-3">
+                                    <p className="text-sm font-medium text-ivory">{line.productName}</p>
+                                    <span className="shrink-0 text-xs uppercase tracking-[0.16em] text-cyanGlow">{line.quantity} und.</span>
+                                  </div>
+                                  {line.prepArea ? <p className="mt-1 text-xs uppercase tracking-[0.16em] text-mist">{line.prepArea === 'kitchen' ? 'Cocina' : 'Bar'}</p> : null}
+                                  {line.notes ? <p className="mt-1 text-sm text-amberGlow">{line.notes}</p> : null}
+                                </div>
+                              ))}
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </article>
+                  );
+                })}
                 {!(posState?.logs ?? []).length ? <EmptyState message="Todavia no hay movimientos recientes en la trazabilidad POS." /> : null}
               </div>
             ) : null}
@@ -3826,16 +3927,16 @@ function playRealtimeTone(audioContext: AudioContext | null, tone: RealtimeSigna
 function PreparationQueuePanel({
   areaLabel,
   busyAction,
-  directDispatchSourceKeys,
   items,
+  onDirectDelivered,
   onMoveStatus,
   operationalFlowSettings,
   title,
 }: {
   areaLabel: string;
   busyAction: string | null;
-  directDispatchSourceKeys: Set<string>;
   items: PosOrderItem[];
+  onDirectDelivered: (item: PosOrderItem) => Promise<void>;
   onMoveStatus: (item: PosOrderItem, nextStatus: 'in_process' | 'ready') => Promise<void>;
   operationalFlowSettings: PosOperationalFlowSettings;
   title: string;
@@ -3845,7 +3946,7 @@ function PreparationQueuePanel({
       <Panel title={title} subtitle={`Solo ves la cola operativa que corresponde a ${areaLabel.toLowerCase()}. Cada producto muestra su mesa y origen para facilitar el pickup.`}>
         <div className="space-y-3">
           {items.map((item) => {
-            const isDirectDispatch = item.menuItemSourceKey ? directDispatchSourceKeys.has(item.menuItemSourceKey) : false;
+            const isDirectDispatch = shouldUseDirectDeliveryStep(item, operationalFlowSettings);
             const shouldUseInProcess = shouldUseInProcessStep(item, operationalFlowSettings, isDirectDispatch);
 
             return (
@@ -3880,8 +3981,13 @@ function PreparationQueuePanel({
                   </p>
                   {item.notes ? <p className="mt-2 text-sm text-amberGlow">{item.notes}</p> : null}
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  {['pending_preparation', 'sent'].includes(item.operationalStatus) ? (
+                  <div className="flex flex-wrap gap-2">
+                  {isDirectDispatch && isDirectDeliveryCandidate(item) ? (
+                    <button type="button" onClick={() => void onDirectDelivered(item)} disabled={Boolean(busyAction)} className={primaryButtonClassName}>
+                      Entregar directo
+                    </button>
+                  ) : null}
+                  {!isDirectDispatch && ['pending_preparation', 'sent'].includes(item.operationalStatus) ? (
                     <button
                       type="button"
                       onClick={() => void onMoveStatus(item, shouldUseInProcess ? 'in_process' : 'ready')}
@@ -3891,7 +3997,7 @@ function PreparationQueuePanel({
                       {shouldUseInProcess ? 'En proceso' : 'Marcar listo'}
                     </button>
                   ) : null}
-                  {item.operationalStatus === 'in_process' ? (
+                  {!isDirectDispatch && item.operationalStatus === 'in_process' ? (
                     <button type="button" onClick={() => void onMoveStatus(item, 'ready')} disabled={Boolean(busyAction)} className={primaryButtonClassName}>
                       Marcar listo
                     </button>
@@ -3926,7 +4032,7 @@ function OperationalFlowSettingsPanel({
 
   return (
     <section>
-      <Panel title="Flujo operativo" subtitle="Activa o salta pasos intermedios por area. Los estados se conservan para trazabilidad.">
+      <Panel title="Flujo operativo" subtitle="Elige que pasos ve cada area. Cada cambio afecta los botones disponibles y conserva la trazabilidad.">
         <div className="grid gap-3 md:grid-cols-2">
           {areas.map(({ area, label }) => (
             <article key={area} className="rounded-[1.1rem] border border-white/8 bg-white/[0.02] p-4">
@@ -3937,16 +4043,31 @@ function OperationalFlowSettingsPanel({
                 </div>
               </div>
 
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                <FlowSwitch
+                  checked={settings[area].useDirectDelivery}
+                  description="Activo: muestra Entregar directo y salta Listo. Apagado: primero se marca Listo."
+                  disabled={Boolean(busyAction) || savingArea === area}
+                  flowOff="Pedido -> Listo -> Entregado"
+                  flowOn="Pedido -> Entregado"
+                  label="Entrega directa"
+                  onChange={(value) => void onToggle(area, 'useDirectDelivery', value)}
+                />
                 <FlowSwitch
                   checked={settings[area].useInProcess}
+                  description="Activo: agrega En proceso antes de Listo. Apagado: el producto pasa directo a Listo."
                   disabled={Boolean(busyAction) || savingArea === area}
+                  flowOff="Pedido -> Listo"
+                  flowOn="Pedido -> En proceso -> Listo"
                   label="En proceso"
                   onChange={(value) => void onToggle(area, 'useInProcess', value)}
                 />
                 <FlowSwitch
                   checked={settings[area].usePickingUp}
+                  description="Activo: agrega Ir a recoger antes de Entregado. Apagado: Listo se entrega con un toque."
                   disabled={Boolean(busyAction) || savingArea === area}
+                  flowOff="Listo -> Entregado"
+                  flowOn="Listo -> Recogiendo -> Entregado"
                   label="Recogiendo"
                   onChange={(value) => void onToggle(area, 'usePickingUp', value)}
                 />
@@ -3961,25 +4082,42 @@ function OperationalFlowSettingsPanel({
 
 function FlowSwitch({
   checked,
+  description,
   disabled,
+  flowOff,
+  flowOn,
   label,
   onChange,
 }: {
   checked: boolean;
+  description: string;
   disabled: boolean;
+  flowOff: string;
+  flowOn: string;
   label: string;
   onChange: (checked: boolean) => void;
 }) {
   return (
-    <label className={`flex items-center justify-between gap-3 rounded-[1rem] border border-white/8 bg-black/15 px-3 py-2.5 ${disabled ? 'opacity-60' : ''}`}>
-      <span className="text-sm font-medium text-ivory">{label}</span>
-      <input
-        type="checkbox"
-        checked={checked}
-        disabled={disabled}
-        onChange={(event) => onChange(event.target.checked)}
-        className="h-5 w-10 cursor-pointer accent-cyanGlow disabled:cursor-not-allowed"
-      />
+    <label className={`block rounded-[1rem] border border-white/8 bg-black/15 px-3 py-3 ${disabled ? 'opacity-60' : ''}`}>
+      <span className="flex items-start justify-between gap-3">
+        <span className="min-w-0">
+          <span className="block text-sm font-semibold text-ivory">{label}</span>
+          <span className={`mt-1 block text-[0.62rem] font-semibold uppercase tracking-[0.16em] ${checked ? 'text-emerald-200' : 'text-mist'}`}>
+            {checked ? 'Activo' : 'Apagado'}
+          </span>
+        </span>
+        <input
+          type="checkbox"
+          checked={checked}
+          disabled={disabled}
+          onChange={(event) => onChange(event.target.checked)}
+          className="mt-0.5 h-5 w-10 shrink-0 cursor-pointer accent-cyanGlow disabled:cursor-not-allowed"
+        />
+      </span>
+      <span className="mt-3 block text-xs leading-5 text-mist">{description}</span>
+      <span className="mt-3 block rounded-[0.75rem] border border-white/8 bg-white/[0.03] px-2.5 py-2 text-xs leading-5 text-cyanGlow">
+        {checked ? flowOn : flowOff}
+      </span>
     </label>
   );
 }
@@ -4706,7 +4844,11 @@ function formatPosEventLabel(eventType: string) {
     items_added: 'Productos agregados',
     custom_item_added: 'Extra agregado',
     item_cancelled: 'Producto cancelado',
+    item_direct_delivered: 'Producto entregado directo',
     item_delivered: 'Producto entregado',
+    item_in_process: 'Producto en proceso',
+    item_picking_up: 'Producto en recogida',
+    item_ready: 'Producto listo',
     item_marked_in_process: 'Producto en proceso',
     item_marked_picking_up: 'Producto en recogida',
     item_marked_ready: 'Producto listo',
@@ -4715,7 +4857,10 @@ function formatPosEventLabel(eventType: string) {
     item_updated: 'Producto actualizado',
     item_voided_after_process: 'Producto anulado por excepcion',
     order_reconciled: 'Cuenta reconciliada',
+    order_sent_to_preparation: 'Tanda enviada a preparacion',
+    payment_confirmed: 'Pago confirmado',
     payment_recorded: 'Pago registrado',
+    payment_rejected: 'Pago rechazado',
     sales_session_closed: 'Jornada cerrada',
     sales_session_opened: 'Jornada abierta',
     table_created: 'Mesa creada',
@@ -4748,6 +4893,65 @@ function resolveLogContextLabel(
   return null;
 }
 
+function resolveLogProductLabel(log: PosState['logs'][number]) {
+  const record = log.afterData ?? log.beforeData;
+  if (!record) {
+    return null;
+  }
+
+  const productName = getRecordString(record, 'productName') ?? getRecordString(record, 'product_name');
+  if (!productName) {
+    return null;
+  }
+
+  const quantity = getRecordNumber(record, 'quantity');
+  return quantity && quantity > 1 ? `${quantity} x ${productName}` : productName;
+}
+
+interface TraceLogLineItem {
+  id: string | null;
+  notes: string | null;
+  prepArea: PosOrderItem['prepArea'] | null;
+  productName: string;
+  quantity: number;
+}
+
+function resolveLogLineItems(log: PosState['logs'][number]): TraceLogLineItem[] {
+  const source = Array.isArray(log.afterData) ? log.afterData : Array.isArray(log.beforeData) ? log.beforeData : [];
+
+  return source
+    .filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === 'object' && !Array.isArray(entry))
+    .map((entry) => {
+      const productName = getRecordString(entry, 'productName') ?? getRecordString(entry, 'product_name');
+      if (!productName) {
+        return null;
+      }
+
+      return {
+        id: getRecordString(entry, 'id'),
+        notes: getRecordString(entry, 'notes'),
+        prepArea: parseTraceLogPrepArea(getRecordString(entry, 'prepArea') ?? getRecordString(entry, 'prep_area')),
+        productName,
+        quantity: getRecordNumber(entry, 'quantity') ?? 1,
+      };
+    })
+    .filter((entry): entry is TraceLogLineItem => Boolean(entry));
+}
+
+function parseTraceLogPrepArea(value: string | null): PosOrderItem['prepArea'] | null {
+  return value === 'bar' || value === 'kitchen' ? value : null;
+}
+
+function getRecordString(record: Record<string, unknown>, key: string) {
+  const value = record[key];
+  return typeof value === 'string' && value.trim() ? value : null;
+}
+
+function getRecordNumber(record: Record<string, unknown>, key: string) {
+  const value = record[key];
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
 function resolveReplacementAnchorTimestamp(item: PosOrderItem, itemsById: Map<string, PosOrderItem>) {
   let anchor = item;
   const visited = new Set<string>();
@@ -4768,11 +4972,11 @@ function resolvePreparationQueueTimestampForUi(item: PosOrderItem) {
   return item.sentAt ?? item.createdAt;
 }
 
-function sortPreparationQueueForUi(items: PosOrderItem[], directDispatchSourceKeys: Set<string>, operationalFlowSettings: PosOperationalFlowSettings) {
+function sortPreparationQueueForUi(items: PosOrderItem[], operationalFlowSettings: PosOperationalFlowSettings) {
   return [...items].sort((left, right) => {
     const priorityDifference =
-      getPreparationQueuePriorityForUi(left, directDispatchSourceKeys, operationalFlowSettings) -
-      getPreparationQueuePriorityForUi(right, directDispatchSourceKeys, operationalFlowSettings);
+      getPreparationQueuePriorityForUi(left, operationalFlowSettings) -
+      getPreparationQueuePriorityForUi(right, operationalFlowSettings);
 
     if (priorityDifference !== 0) {
       return priorityDifference;
@@ -4782,8 +4986,8 @@ function sortPreparationQueueForUi(items: PosOrderItem[], directDispatchSourceKe
   });
 }
 
-function getPreparationQueuePriorityForUi(item: PosOrderItem, directDispatchSourceKeys: Set<string>, operationalFlowSettings: PosOperationalFlowSettings) {
-  const isDirectDispatch = item.menuItemSourceKey ? directDispatchSourceKeys.has(item.menuItemSourceKey) : false;
+function getPreparationQueuePriorityForUi(item: PosOrderItem, operationalFlowSettings: PosOperationalFlowSettings) {
+  const isDirectDispatch = shouldUseDirectDeliveryStep(item, operationalFlowSettings);
   const shouldUseInProcess = shouldUseInProcessStep(item, operationalFlowSettings, isDirectDispatch);
 
   if (item.operationalStatus === 'in_process' && shouldUseInProcess) {
@@ -4819,6 +5023,14 @@ function shouldUseInProcessStep(item: PosOrderItem, operationalFlowSettings: Pos
 
 function shouldUsePickingUpStep(item: PosOrderItem, operationalFlowSettings: PosOperationalFlowSettings) {
   return operationalFlowSettings[item.prepArea].usePickingUp;
+}
+
+function shouldUseDirectDeliveryStep(item: PosOrderItem, operationalFlowSettings: PosOperationalFlowSettings) {
+  return operationalFlowSettings[item.prepArea].useDirectDelivery;
+}
+
+function isDirectDeliveryCandidate(item: PosOrderItem) {
+  return ['pending_preparation', 'sent', 'in_process'].includes(item.operationalStatus);
 }
 
 function getPosFallbackSyncInterval(tab: WorkspaceTab) {

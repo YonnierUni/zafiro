@@ -281,16 +281,20 @@ alter table public.pos_order_status_logs
 
 create table if not exists public.pos_operational_flow_settings (
   area text primary key check (area in ('bar', 'kitchen')),
+  use_direct_delivery boolean not null default false,
   use_in_process boolean not null default false,
   use_picking_up boolean not null default false,
   updated_at timestamptz not null default timezone('utc', now()),
   updated_by_email text
 );
 
-insert into public.pos_operational_flow_settings (area, use_in_process, use_picking_up)
+alter table public.pos_operational_flow_settings
+  add column if not exists use_direct_delivery boolean not null default false;
+
+insert into public.pos_operational_flow_settings (area, use_direct_delivery, use_in_process, use_picking_up)
 values
-  ('bar', false, false),
-  ('kitchen', false, false)
+  ('bar', false, false, false),
+  ('kitchen', false, false, false)
 on conflict (area) do nothing;
 
 drop trigger if exists trg_pos_operational_flow_settings_set_updated_at on public.pos_operational_flow_settings;
